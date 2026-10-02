@@ -34,7 +34,7 @@ function draw() {
   landscape.update();
   landscape.draw();
   
-  for (const obstacles of obstacles) {
+  for (const obstacle of obstacles) {
     obstacle.update();
     obstacle.draw();
   }
@@ -73,24 +73,50 @@ function keyPressed() {
 
 // State Manager
 class StateManager {
-  static const states = {
+  static states = {
     initial: {
-      PLAY: PlayState,
+      PLAY: (parent) => {
+          return new PlayState(parent);
+        }
     },
     playing: {
-      DIE: BadEndState,
+      DIE: (parent) => {
+          return new BadEndState(parent);
+        },
+      WIN: (parent) => {
+          return new GoodEndState(parent);
+        },
+      PAUSE: (parent) => {
+          return new PauseState(parent);
+        }
     },
     win: {
-      
+      NEXT: (parent) => {
+          return new PlayState(parent);
+        }
     },
     lose: {
-      
+      RETRY: (parent) => {
+          return new PlayState(parent);
+        }
+    },
+    pause: {
+      INIT: (parent) => {
+          return new InitState({level: 0});
+        },
+      BACK: (parent) => {
+          parent.level -= 1;
+          return new PlayState(parent);
+        },
+      START: (parent) => {
+          return parent.parent;
+        }
     }
   };
   
   constructor() {
     this.curName = "initial";
-    this.current = new InitState();
+    this.current = new InitState({level: 0});
   }
 
 }
@@ -99,35 +125,55 @@ class StateManager {
 
 // Initial State
 class InitState {
-  constructor() {
-    
+  constructor(parent) {
+    this.level = parent.level;
   }
 }
 
 // Playing State
 class PlayState {
-  constructor() {
-    
+  constructor(parent) {
+    this.level = parent.level;
   }
 }
 
 // Win State
 class GoodEndState {
-  constructor() {
-    
+  constructor(parent) {
+    this.level = parent.level;
   }
 }
 
 // Lose State
 class BadEndState {
-  constructor() {
-    
+  constructor(parent) {
+    this.level = parent.level;
+  }
+}
+
+// Pause State
+class PauseState {
+  constructor(parent) {
+    this.level = parent.level;
   }
 }
 
 // Level
-class Level {
+class LevelManager {
+  static levels = [];
+  
   constructor() {
-    
+    this.current = 0;
+  }
+  
+  getLevel(i) {
+    while (i >= levels.length) {
+      this.generateLevel();
+    }
+    return this.levels[i];
+  }
+  
+  generateLevel() {
+    //append a levels
   }
 }
