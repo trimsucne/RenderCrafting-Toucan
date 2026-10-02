@@ -2,12 +2,17 @@
 
 const MARGINX = 0, MARGINY = 0;
 
+let player;
 let state, lifes, frog, landscape,
   obstacles = [], ui = [];
 
 function preload() {
   // Preloads de las implementaciones de los modelos.
   //Model1.preload(); ...
+}
+
+function preload() {
+  FrogGreen.preload();
 }
 
 // Inicialización principal
@@ -66,7 +71,8 @@ function sizeY(y) {
 }
 
 function keyPressed() {
-  //player.keyPressed(key);
+  player.update(keyCode);
+  return false;
 }
 
 // Clases auxiliares
