@@ -4,7 +4,7 @@
 const MARGINX = 0, MARGINY = 0;
 
 // Cuadrícula del mapa (filas contadas de arriba hacia abajo)
-// (También podría ser procedimental después)
+// Definición por defecto que es reemplazada procedimentalmente
 const GRID = {
   ROWS: 13,
   GOAL: [0],
@@ -38,6 +38,17 @@ const GRID = {
 
   isRoad(row) {
     return GRID.ROAD.includes(row);
+  },
+
+  // Actualiza la estructura de la grilla con la configuración
+  // correspondiente al nivel actual.
+  set(config) {
+    GRID.ROWS = config.ROWS;
+    GRID.GOAL = config.GOAL;
+    GRID.RIVER = config.RIVER;
+    GRID.MEDIAN = config.MEDIAN;
+    GRID.ROAD = config.ROAD;
+    GRID.START = config.START;
   }
 };
 
@@ -114,6 +125,9 @@ function sizeY(y) {
 // La configuración pertenece al LevelManager.
 // Los objetos concretos se crean aquí desde sus respectivos módulos.
 function loadLevel(level) {
+  // Grilla del nivel.
+  GRID.set(level.grid);
+
   // Obstáculos del nivel (obstacles.js).
   obstacles = createObstacles(level.obstacles);
 
@@ -556,10 +570,13 @@ class LevelManager {
 
   // Genera y guarda un nuevo nivel.
   generateLevel(number) {
+    const grid = this.generateGridConfig(number);
     const level = {
       number: number,
+      // Configuración de la grilla.
+      grid: grid,
       // Configuración de obstáculos.
-      obstacles: this.generateObstacleConfig(number),
+      obstacles: this.generateObstacleConfig(number, grid),
       // Configuración del jugador.
       //
       // TODO:
@@ -597,8 +614,89 @@ class LevelManager {
     return level;
   }
 
+  // Generación procedimental de la estructura de la grilla.
+  // La dificultad del nivel modifica la cantidad de filas
+  // peligrosas y de zonas seguras.
+  // Siempre se mantienen las reglas mínimas:
+  // - una fila de inicio.
+  // - una fila de meta.
+  // - mínimo dos filas de río.
+  // - mínimo dos filas de carretera.
+  // - mínimo un andén entre las zonas peligrosas.
+  generateGridConfig(level) {
+
+    // El nivel determina directamente la cantidad total de filas.
+    const rows = 12 + level;
+
+    const river = [];
+    const road = [];
+    const median = [];
+
+    // Se reservan la primera fila para la meta y la última
+    // para el inicio.
+    const availableRows = rows - 2;
+
+    let row = 1;
+
+    // La estructura se construye desde el inicio hacia la meta.
+    // Cada bloque peligroso tiene como mínimo dos filas.
+    // Los bloques están separados por al menos un andén.
+    let currentType = random() < 0.5 ? "road" : "river";
+
+    let remainingRows = availableRows;
+
+    while (remainingRows > 0) {
+
+      // Si quedan muy pocas filas, se utilizan como zona segura.
+      if (remainingRows === 1) {
+        median.push(row++);
+        remainingRows--;
+        continue;
+      }
+
+      // Bloque peligroso.
+      const maxBlockSize = level + 2;
+
+      // El tamaño del bloque es aleatorio, pero siempre
+      // tiene como mínimo dos filas.
+      const count = floor(random(2, maxBlockSize + 1));
+
+      for (let i = 0; i < count; i++) {
+
+        if (currentType === "river") {
+          river.push(row++);
+        } else {
+          road.push(row++);
+        }
+
+      }
+
+      remainingRows -= count;
+
+      // Si todavía quedan filas, se agrega un andén.
+      if (remainingRows > 0) {
+        median.push(row++);
+        remainingRows--;
+      }
+
+      // Alternamos entre río y carretera.
+      currentType = currentType === "river"
+        ? (random() < 0.8 ? "road" : "river")
+        : (random() < 0.3 ? "road" : "river");
+    }
+
+    return {
+      ROWS: rows,
+      GOAL: [0],
+      RIVER: river,
+      MEDIAN: median,
+      ROAD: road,
+      START: [rows - 1]
+    };
+  }
+  
   // Generación procedimental de la configuración de obstáculos.
-  generateObstacleConfig(level) {
+  generateObstacleConfig(level, grid) {
     const speedFactor = min(1 + 0.15 * level, 2.5);
     const extraCars = floor(level / 2);
     const logShrink = min(floor(level / 3), 2);
@@ -607,109 +705,82 @@ class LevelManager {
       "medium",
       "long"
     ];
-    
-    // Configuración base de los carriles.
-    const baseLanes = [
-      {
-        row: 1,
-        type: "log",
-        size: "medium",
-        dir: -1,
-        speed: 0.09,
-        count: 3
-      },
-      {
-        row: 2,
-        type: "log",
-        size: "long",
-        dir: 1,
-        speed: 0.07,
-        count: 2
-      },
-      {
-        row: 3,
-        type: "log",
-        size: "small",
-        dir: -1,
-        speed: 0.12,
-        count: 4
-      },
-      {
-        row: 4,
-        type: "log",
-        size: "long",
-        dir: 1,
-        speed: 0.10,
-        count: 2
-      },
-      {
-        row: 5,
-        type: "log",
-        size: "medium",
-        dir: -1,
-        speed: 0.06,
-        count: 3
-      },
-      {
-        row: 7,
-        type: "truck",
-        dir: -1,
-        speed: 0.07,
-        count: 2
-      },
-      {
-        row: 8,
-        type: "race",
-        dir: 1,
-        speed: 0.30,
-        count: 1
-      },
-      {
-        row: 9,
-        type: "car",
-        color: "pink",
-        dir: -1,
-        speed: 0.12,
-        count: 3
-      },
-      {
-        row: 10,
-        type: "car",
-        color: "white",
-        dir: 1,
-        speed: 0.09,
-        count: 3
-      },
-      {
-        row: 11,
-        type: "car",
-        color: "yellow",
-        dir: -1,
-        speed: 0.10,
-        count: 3
-      }
-    ];
 
     const result = [];
 
-    for (const base of baseLanes) {
-      // Copia para no modificar la configuración base.
-      const cfg = { ...base };
-      // Troncos
-      if (cfg.type === "log") {
-        const originalIndex = logOrder.indexOf(cfg.size);
-        const index = max(
-          0,
-          originalIndex - logShrink
-        );
-        cfg.size = logOrder[index];
+    // Carriles del río.
+    for (const row of grid.RIVER) {
+      const sizes = [
+        "small",
+        "medium",
+        "long"
+      ];
+
+      const size = sizes[
+        floor(random(sizes.length))
+      ];
+
+      result.push({
+        row: row,
+        type: "log",
+        size: logOrder[
+          max(
+            0,
+            logOrder.indexOf(size) - logShrink
+          )
+        ],
+        dir: random() < 0.5 ? -1 : 1,
+        speed: random(0.06, 0.13) * speedFactor,
+        count: floor(random(2, 5))
+      });
+    }
+
+    // Carriles de la carretera.
+    for (const row of grid.ROAD) {
+      const vehicleTypes = [
+        "car",
+        "car",
+        "truck",
+        "race"
+      ];
+
+      const type = random(vehicleTypes);
+
+      const colors = [
+        "yellow",
+        "pink",
+        "white",
+        "blue"
+      ];
+
+      const cfg = {
+        row: row,
+        type: type,
+        dir: random() < 0.5 ? -1 : 1,
+        speed: 0,
+        count: 0
+      };
+
+      // Cada tipo de vehículo tiene una dificultad base
+      // diferente.
+      if (type === "car") {
+        cfg.color = random(colors);
+        cfg.speed = random(0.08, 0.15);
+        cfg.count = floor(random(2, 4)) + extraCars;
       }
-      // Vehículos
-      else {
-        cfg.count += extraCars;
+
+      else if (type === "truck") {
+        cfg.speed = random(0.05, 0.09);
+        cfg.count = floor(random(1, 3)) + extraCars;
       }
-      // Dificultad
+
+      else if (type === "race") {
+        cfg.speed = random(0.20, 0.32);
+        cfg.count = max(1, floor(random(1, 2)) + extraCars);
+      }
+
       cfg.speed *= speedFactor;
+
       result.push(cfg);
     }
 
