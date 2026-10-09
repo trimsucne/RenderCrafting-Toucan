@@ -1,7 +1,24 @@
 // Archivo principal: Modelo global de datos, estado y niveles.
+//
+// Cada nivel es una de las 20 localidades de Bogotá, en orden oficial
+// (1. Usaquén ... 20. Sumapaz). La dificultad sube con el número de
+// la localidad y cada una tiene sus ríos, su tráfico, sus parques y
+// su hinchada.
 
 // Márgenes generales del mapa.
 const MARGINX = 0, MARGINY = 0;
+
+// Alto fijo de cada fila en pixeles. Los niveles largos no caben en
+// la pantalla: la cámara sigue al sapo, así los objetos nunca se
+// hacen más pequeños.
+const ROW_HEIGHT = 50;
+
+// Vidas al empezar y máximo de vidas que se pueden acumular.
+const START_LIFES = 3;
+const MAX_LIFES = 9;
+
+// Alto de la barra del HUD (arriba de la pantalla).
+const HUD_HEIGHT = 36;
 
 // Cuadrícula del mapa (filas contadas de arriba hacia abajo)
 // Definición por defecto que es reemplazada procedimentalmente
@@ -11,19 +28,28 @@ const GRID = {
   RIVER: [1, 2, 3, 4, 5],
   MEDIAN: [6],
   ROAD: [7, 8, 9, 10, 11],
+  PARK: [],
   START: [12],
 
-  // Centro vertical (en píxeles) de una fila
+  // Nombre del río de cada fila de río: { fila: "Río Fucha", ... }
+  RIVER_NAMES: {},
+
+  // Centro vertical (en píxeles del mapa) de una fila
   rowY(row) {
-    return mapY((row + 0.5) / GRID.ROWS);
+    return MARGINY + (row + 0.5) * ROW_HEIGHT;
   },
 
   // Alto de una fila en píxeles
   rowHeight() {
-    return sizeY(1 / GRID.ROWS);
+    return ROW_HEIGHT;
   },
 
-  // Fila en la que está una coordenada y (en píxeles)
+  // Alto de todo el mapa en píxeles
+  mapHeight() {
+    return GRID.ROWS * ROW_HEIGHT;
+  },
+
+  // Fila en la que está una coordenada y (en píxeles del mapa)
   rowOf(y) {
     return constrain(
       floor((y - MARGINY) / GRID.rowHeight()),
@@ -40,6 +66,10 @@ const GRID = {
     return GRID.ROAD.includes(row);
   },
 
+  isPark(row) {
+    return GRID.PARK.includes(row);
+  },
+
   // Actualiza la estructura de la grilla con la configuración
   // correspondiente al nivel actual.
   set(config) {
@@ -48,7 +78,49 @@ const GRID = {
     GRID.RIVER = config.RIVER;
     GRID.MEDIAN = config.MEDIAN;
     GRID.ROAD = config.ROAD;
+    GRID.PARK = config.PARK;
     GRID.START = config.START;
+    GRID.RIVER_NAMES = config.RIVER_NAMES;
+  }
+};
+
+
+// Cámara: muestra solo una parte del mapa y sigue al sapo.
+// camera.y es la 'y' del mapa que queda en el borde de arriba de la
+// pantalla.
+const camera = {
+  y: 0,
+
+  // Dónde debería estar la cámara para ver al sapo en la parte de
+  // abajo de la pantalla. Arriba se deja el espacio del HUD para que
+  // no tape la meta.
+  target(player) {
+    return constrain(player.y - height * 0.65, -HUD_HEIGHT, GRID.mapHeight() - height);
+  },
+
+  // Se acerca poco a poco a su objetivo (movimiento suave).
+  follow(player) {
+    camera.y = lerp(camera.y, camera.target(player), 0.12);
+  },
+
+  // Se pone de una vez en su objetivo (al empezar un nivel).
+  jumpTo(player) {
+    camera.y = camera.target(player);
+  },
+
+  // Todo lo que se dibuje entre begin() y end() se mueve con la cámara.
+  begin() {
+    push();
+    translate(0, -camera.y);
+  },
+
+  end() {
+    pop();
+  },
+
+  // ¿Algo con centro en y y alto h se alcanza a ver?
+  isVisible(y, h) {
+    return y + h / 2 >= camera.y && y - h / 2 <= camera.y + height;
   }
 };
 
@@ -80,7 +152,7 @@ function setup() {
   imageMode(CENTER);
   rectMode(CENTER);
 
-  lifes = 3;
+  lifes = START_LIFES;
   levelManager = new LevelManager();
   state = new StateManager();
 }
@@ -89,7 +161,7 @@ function setup() {
 // Renderizado principal.
 // Cada estado implementa su propio draw().
 function draw() {
-  background(192);
+  background(30);
   state.draw();
 }
 
@@ -99,8 +171,9 @@ function draw() {
 function keyPressed() {
   state.keyPressed(key);
 
-  // Evita que las flechas y la barra espaciadora desplacen la página.
-  if ([UP_ARROW, DOWN_ARROW, LEFT_ARROW, RIGHT_ARROW, 32].includes(keyCode)) {
+  // Evita que las flechas y la barra espaciadora muevan la página.
+  if (keyCode === UP_ARROW || keyCode === DOWN_ARROW ||
+      keyCode === LEFT_ARROW || keyCode === RIGHT_ARROW || key === " ") {
     return false;
   }
 }
@@ -108,7 +181,7 @@ function keyPressed() {
 
 // Reinicia lo que se acumula entre niveles (vidas y puntaje).
 function resetGame() {
-  lifes = 3;
+  lifes = START_LIFES;
   resetScore();
 }
 
@@ -154,6 +227,9 @@ function loadLevel(level) {
 
   // Puntaje y reloj del nivel (manager.js)
   startLevel(frog);
+
+  // La cámara empieza abajo, donde está el sapo.
+  camera.jumpTo(frog);
 }
 
 
@@ -173,6 +249,8 @@ class StateManager {
         return new BadEndState(parent);
       },
       WIN: (parent) => {
+        // Premio: una vida extra por cada localidad cruzada.
+        lifes = min(lifes + 1, MAX_LIFES);
         return new GoodEndState(parent);
       },
       PAUSE: (parent) => {
@@ -181,6 +259,12 @@ class StateManager {
     },
     win: {
       NEXT: (parent) => {
+        // Después de Sumapaz se vuelve al inicio.
+        if (parent.level === LevelManager.LOCALIDADES.length - 1) {
+          parent.level = 0;
+          resetGame();
+          return new InitState(parent);
+        }
         parent.level += 1;
         return new PlayState(parent);
       }
@@ -315,21 +399,26 @@ class PlayState {
 
   // Renderizado principal del juego.
   draw() {
-    // Background
-    if (landscape !== undefined) {
-      landscape.update();
-      landscape.draw();
-    }
-    // Obstáculos
+    camera.follow(frog);
+
+    // Mundo (se mueve con la cámara).
+    camera.begin();
+
+    landscape.update();
+    landscape.draw();
+
     for (const obstacle of obstacles) {
       obstacle.update();
-      obstacle.draw();
+      if (camera.isVisible(obstacle.y, obstacle.height)) {
+        obstacle.draw();
+      }
     }
-    // Jugador
-    if (frog !== undefined) {
-      frog.update();
-      frog.draw();
-    }
+
+    frog.update();
+    frog.draw();
+
+    camera.end();
+
     // Colisiones (manager.js)
     const result = manageCollisions(frog, obstacles);
 
@@ -341,7 +430,7 @@ class PlayState {
       state.change("WIN");
     }
 
-    // UI
+    // UI (fija en la pantalla, no se mueve con la cámara)
     for (const element of ui) {
       element.update();
       element.draw();
@@ -351,9 +440,7 @@ class PlayState {
   // Entrada durante la partida.
   keyPressed(key) {
     // Movimiento del jugador (player.js).
-    if (frog !== undefined) {
-      frog.keyPressed(key);
-    }
+    frog.keyPressed(key);
 
     // Pausa general del juego.
     if (key === "p" || key === "P") {
@@ -412,16 +499,17 @@ class PauseState {
   // Renderizado de la pantalla de pausa.
   draw() {
 
-    // El juego que estaba debajo.
-    if (landscape !== undefined) {
-      landscape.draw();
-    }
+    // El juego que estaba debajo, quieto.
+    camera.begin();
+    landscape.draw();
     for (const obstacle of obstacles) {
-      obstacle.draw();
+      if (camera.isVisible(obstacle.y, obstacle.height)) {
+        obstacle.draw();
+      }
     }
-    if (frog !== undefined) {
-      frog.draw();
-    }
+    frog.draw();
+    camera.end();
+
     for (const element of ui) {
       element.draw();
     }
@@ -442,7 +530,7 @@ class PauseState {
       state.change("INIT");
     }
 
-    // Volver al nivel anterior.
+    // Volver a la localidad anterior.
     if (key === "b" || key === "B") {
       state.change("BACK");
     }
@@ -452,12 +540,62 @@ class PauseState {
 
 // Level Manager
 class LevelManager {
+  // Las 20 localidades de Bogotá, en orden oficial.
+  //   team:    hinchada (norte: Santa Fe, centro: Equidad, sur: Millonarios)
+  //   rivers:  ríos y quebradas que la atraviesan
+  //   road, river, park: qué tanto hay de cada cosa (más = más filas)
+  //   people:  cuántos peatones hay por andén
+  //   troncal: si pasa TransMilenio
+  //   theme:   paleta de colores del escenario
+  static LOCALIDADES = [
+    { name: "Usaquén", team: "santafe", rivers: ["Canal Torca", "Canal Córdoba"],
+      road: 3, river: 1, park: 2, people: 2, troncal: true, theme: "day" },
+    { name: "Chapinero", team: "santafe", rivers: ["Quebrada La Vieja", "Río Arzobispo"],
+      road: 4, river: 1, park: 1, people: 3, troncal: true, theme: "day" },
+    { name: "Santa Fe", team: "equidad", rivers: ["Río San Francisco", "Río Arzobispo"],
+      road: 3, river: 1, park: 2, people: 3, troncal: true, theme: "colonial" },
+    { name: "San Cristóbal", team: "millonarios", rivers: ["Río Fucha", "Quebrada Chiguaza"],
+      road: 2, river: 2, park: 2, people: 2, troncal: false, theme: "cloudy" },
+    { name: "Usme", team: "millonarios", rivers: ["Río Tunjuelo", "Quebrada Yomasa"],
+      road: 1, river: 2, park: 3, people: 1, troncal: true, theme: "paramo" },
+    { name: "Tunjuelito", team: "millonarios", rivers: ["Río Tunjuelo"],
+      road: 2, river: 2, park: 1, people: 2, troncal: true, theme: "cloudy" },
+    { name: "Bosa", team: "millonarios", rivers: ["Río Tunjuelo", "Río Bogotá"],
+      road: 2, river: 3, park: 1, people: 2, troncal: true, theme: "sunset" },
+    { name: "Kennedy", team: "equidad", rivers: ["Río Fucha", "Río Tunjuelo", "Río Bogotá"],
+      road: 4, river: 2, park: 1, people: 3, troncal: true, theme: "sunset" },
+    { name: "Fontibón", team: "santafe", rivers: ["Río Fucha", "Río Bogotá"],
+      road: 3, river: 2, park: 1, people: 2, troncal: true, theme: "day" },
+    { name: "Engativá", team: "santafe", rivers: ["Río Juan Amarillo", "Río Bogotá", "Humedal Jaboque"],
+      road: 3, river: 2, park: 2, people: 2, troncal: true, theme: "day" },
+    { name: "Suba", team: "santafe", rivers: ["Río Juan Amarillo", "Humedal La Conejera", "Río Bogotá"],
+      road: 3, river: 2, park: 2, people: 2, troncal: true, theme: "sunset" },
+    { name: "Barrios Unidos", team: "santafe", rivers: ["Canal Salitre"],
+      road: 3, river: 1, park: 3, people: 2, troncal: true, theme: "cloudy" },
+    { name: "Teusaquillo", team: "santafe", rivers: ["Río Arzobispo"],
+      road: 2, river: 1, park: 4, people: 2, troncal: true, theme: "day" },
+    { name: "Los Mártires", team: "equidad", rivers: [],
+      road: 5, river: 0, park: 1, people: 4, troncal: true, theme: "night" },
+    { name: "Antonio Nariño", team: "equidad", rivers: ["Río Fucha"],
+      road: 3, river: 1, park: 1, people: 3, troncal: true, theme: "cloudy" },
+    { name: "Puente Aranda", team: "equidad", rivers: ["Río Fucha"],
+      road: 5, river: 1, park: 0, people: 2, troncal: true, theme: "night" },
+    { name: "La Candelaria", team: "equidad", rivers: ["Río San Francisco"],
+      road: 2, river: 1, park: 1, people: 4, troncal: true, theme: "colonial" },
+    { name: "Rafael Uribe Uribe", team: "millonarios", rivers: ["Quebrada Chiguaza"],
+      road: 3, river: 1, park: 1, people: 3, troncal: true, theme: "sunset" },
+    { name: "Ciudad Bolívar", team: "millonarios", rivers: ["Río Tunjuelo", "Quebrada Limas"],
+      road: 2, river: 2, park: 2, people: 3, troncal: true, theme: "night" },
+    { name: "Sumapaz", team: "millonarios", rivers: ["Río Sumapaz", "Río Tunjuelo"],
+      road: 1, river: 3, park: 4, people: 1, troncal: false, theme: "paramo" }
+  ];
+
+  // Tipos de peatón que se ven en los andenes.
+  static PEOPLE = ["oficinista", "estudiante", "sombrilla", "vendedor", "habitante", "perro"];
+
   // Configuraciones de niveles ya generadas.
   // Se almacenan los "generadores" y no los objetos.
   static levels = [];
-
-  // Máximo de filas que puede tener un nivel.
-  static MAX_ROWS = 20;
 
   constructor() {
     this.current = 0;
@@ -475,30 +613,32 @@ class LevelManager {
     return this.levels[i];
   }
 
-  // Genera y guarda un nuevo nivel.
+  // Genera y guarda un nuevo nivel (number va de 0 a 19).
   generateLevel(number) {
-    const grid = this.generateGridConfig(number);
+    const loc = LevelManager.LOCALIDADES[number];
+    const grid = this.generateGridConfig(number, loc);
+
     const level = {
       number: number,
       // Configuración de la grilla.
       grid: grid,
       // Configuración de obstáculos.
-      obstacles: this.generateObstacleConfig(number, grid),
-      // Configuración del jugador (player.js): columna inicial
-      // (normalizada) y especie, que se alterna en cada nivel.
+      obstacles: this.generateObstacleConfig(number, loc, grid),
+      // Configuración del jugador (player.js).
       player: {
         x: 0.5,
-        type: number % 2 === 0 ? "green" : "golden"
+        team: loc.team
       },
-      // Configuración del background (background.js): la paleta
-      // cambia cada dos niveles (día, atardecer, noche).
+      // Configuración del background (background.js).
       background: {
-        theme: ["day", "sunset", "night"][floor(number / 2) % 3]
+        theme: loc.theme
       },
       // Configuración de la UI (background.js).
       ui: {
-        level: number,
-        timer: true
+        number: number,
+        name: loc.name,
+        team: loc.team,
+        rivers: loc.rivers
       }
     };
 
@@ -506,81 +646,87 @@ class LevelManager {
     return level;
   }
 
-  // Generación procedimental de la estructura de la grilla.
-  // La dificultad del nivel modifica la cantidad de filas
-  // peligrosas y de zonas seguras.
-  // Siempre se mantienen las reglas mínimas:
-  // - una fila de inicio.
-  // - una fila de meta.
-  // - mínimo dos filas de río.
-  // - mínimo dos filas de carretera.
-  // - mínimo un andén entre las zonas peligrosas.
-  generateGridConfig(level) {
+  // Elige el tipo del siguiente bloque según qué tanto hay de cada
+  // cosa en la localidad. No repite el bloque anterior (salvo que no
+  // haya otra opción).
+  pickBlockType(loc, lastType) {
+    const options = [];
 
-    // El nivel determina directamente la cantidad total de filas
-    // (con un máximo para que las filas no queden diminutas).
-    const rows = min(12 + level, LevelManager.MAX_ROWS);
+    for (let k = 0; k < loc.road; k++) options.push("road");
+    for (let k = 0; k < loc.river; k++) options.push("river");
+    for (let k = 0; k < loc.park; k++) options.push("park");
+
+    const different = options.filter((type) => type !== lastType);
+    if (different.length > 0) {
+      return random(different);
+    }
+    return random(options);
+  }
+
+  // Generación procedimental de la estructura de la grilla.
+  // - Fila 0: meta. Última fila: inicio.
+  // - En medio, bloques de carretera, río o parque según la localidad.
+  // - Después de cada bloque de carretera o río va un andén.
+  // - Las localidades más altas tienen más filas y bloques más largos.
+  generateGridConfig(number, loc) {
+    const rows = 14 + floor(number * 0.8);       // de 14 a 29 filas
+    const maxBlock = 2 + floor(number / 7);      // de 2 a 4 filas seguidas
 
     const river = [];
     const road = [];
+    const park = [];
     const median = [];
-
-    // Se reservan la primera fila para la meta y la última
-    // para el inicio.
-    const availableRows = rows - 2;
+    const riverNames = {};
 
     let row = 1;
-
-    // La estructura se construye desde la meta hacia el inicio.
-    // Cada bloque peligroso tiene como mínimo dos filas.
-    // Los bloques están separados por al menos un andén.
-    let currentType = random() < 0.5 ? "road" : "river";
-
-    let remainingRows = availableRows;
+    let remainingRows = rows - 2;
+    let lastType = "";
+    let riverCount = 0;
 
     while (remainingRows > 0) {
 
-      // Si quedan muy pocas filas, se utilizan como zona segura.
+      // Si queda una sola fila, se vuelve andén.
       if (remainingRows === 1) {
-        median.push(row++);
+        median.push(row);
+        row++;
         remainingRows--;
         continue;
       }
 
-      // Bloque peligroso.
-      const maxBlockSize = level + 2;
+      const type = this.pickBlockType(loc, lastType);
 
-      // El tamaño del bloque es aleatorio, pero siempre
-      // tiene como mínimo dos filas.
-      // Nunca más filas de las que quedan (si no, el bloque
-      // se comería la fila de inicio o se saldría de la grilla).
-      const count = min(
-        floor(random(2, maxBlockSize + 1)),
-        remainingRows
-      );
+      // Tamaño del bloque (nunca más de las filas que quedan).
+      let size = floor(random(1, maxBlock + 1));
+      if (type === "park") {
+        size = floor(random(1, 3));
+      }
+      size = min(size, remainingRows);
 
-      for (let i = 0; i < count; i++) {
-
-        if (currentType === "river") {
-          river.push(row++);
+      for (let k = 0; k < size; k++) {
+        if (type === "road") {
+          road.push(row);
+        } else if (type === "river") {
+          river.push(row);
+          riverNames[row] = loc.rivers[riverCount % loc.rivers.length];
         } else {
-          road.push(row++);
+          park.push(row);
         }
+        row++;
+      }
+      remainingRows -= size;
 
+      if (type === "river") {
+        riverCount++;
       }
 
-      remainingRows -= count;
-
-      // Si todavía quedan filas, se agrega un andén.
-      if (remainingRows > 0) {
-        median.push(row++);
+      // Andén después de carretera o río.
+      if (remainingRows > 0 && type !== "park") {
+        median.push(row);
+        row++;
         remainingRows--;
       }
 
-      // Alternamos entre río y carretera.
-      currentType = currentType === "river"
-        ? (random() < 0.8 ? "road" : "river")
-        : (random() < 0.3 ? "road" : "river");
+      lastType = type;
     }
 
     return {
@@ -589,97 +735,92 @@ class LevelManager {
       RIVER: river,
       MEDIAN: median,
       ROAD: road,
-      START: [rows - 1]
+      PARK: park,
+      START: [rows - 1],
+      RIVER_NAMES: riverNames
     };
   }
-  
+
   // Generación procedimental de la configuración de obstáculos.
-  generateObstacleConfig(level, grid) {
-    const speedFactor = min(1 + 0.15 * level, 2.5);
-    const extraCars = floor(level / 2);
-    const logShrink = min(floor(level / 3), 2);
-    const logOrder = [
-      "small",
-      "medium",
-      "long"
-    ];
+  // La dificultad sube poco a poco con el número de la localidad.
+  generateObstacleConfig(number, loc, grid) {
+    const speedFactor = 1 + 0.04 * number;        // de 1.0 a 1.76
+    const extra = floor(number / 6);              // de 0 a 3 obstáculos más
+    const logShrink = floor(number / 8);          // troncos más cortos
+    const logSizes = ["small", "medium", "long"];
 
     const result = [];
 
-    // Carriles del río.
+    // Ríos: troncos.
     for (const row of grid.RIVER) {
-      const sizes = [
-        "small",
-        "medium",
-        "long"
-      ];
-
-      const size = sizes[
-        floor(random(sizes.length))
-      ];
-
+      const k = floor(random(3));
       result.push({
         row: row,
         type: "log",
-        size: logOrder[
-          max(
-            0,
-            logOrder.indexOf(size) - logShrink
-          )
-        ],
-        dir: random() < 0.5 ? -1 : 1,
-        speed: random(0.06, 0.13) * speedFactor,
+        size: logSizes[max(0, k - logShrink)],
+        dir: random([-1, 1]),
+        speed: random(0.05, 0.10) * speedFactor,
         count: floor(random(2, 5))
       });
     }
 
-    // Carriles de la carretera.
+    // Carreteras: Spark GT, taxis, motos, buses y TransMilenio.
     for (const row of grid.ROAD) {
-      const vehicleTypes = [
-        "car",
-        "car",
-        "truck",
-        "race"
-      ];
-
-      const type = random(vehicleTypes);
-
-      const colors = [
-        "yellow",
-        "pink",
-        "white",
-        "blue"
-      ];
+      const vehicles = ["spark", "spark", "spark", "moto", "bus"];
+      if (number >= 6) {
+        vehicles.push("moto");             // más motos en el sur
+      }
+      if (loc.troncal) {
+        vehicles.push("transmilenio");
+      }
 
       const cfg = {
         row: row,
-        type: type,
-        dir: random() < 0.5 ? -1 : 1,
-        speed: 0,
-        count: 0
+        type: random(vehicles),
+        dir: random([-1, 1])
       };
 
-      // Cada tipo de vehículo tiene una dificultad base
-      // diferente.
-      if (type === "car") {
-        cfg.color = random(colors);
-        cfg.speed = random(0.08, 0.15);
-        cfg.count = floor(random(2, 4)) + extraCars;
-      }
-
-      else if (type === "truck") {
-        cfg.speed = random(0.05, 0.09);
-        cfg.count = floor(random(1, 3)) + extraCars;
-      }
-
-      else if (type === "race") {
-        cfg.speed = random(0.20, 0.32);
-        cfg.count = max(1, floor(random(1, 2)) + extraCars);
+      if (cfg.type === "spark") {
+        cfg.color = random(["rojo", "blanco", "gris", "azul", "taxi", "taxi"]);
+        cfg.speed = random(0.06, 0.11);
+        cfg.count = floor(random(2, 4)) + extra;
+      } else if (cfg.type === "moto") {
+        cfg.color = random(["roja", "negra", "azul"]);
+        cfg.speed = random(0.14, 0.22);
+        cfg.count = 1 + floor(extra / 2);
+      } else if (cfg.type === "bus") {
+        cfg.speed = random(0.04, 0.07);
+        cfg.count = 1 + floor(extra / 2);
+      } else {
+        cfg.speed = random(0.05, 0.08);
+        cfg.count = 1;
       }
 
       cfg.speed *= speedFactor;
-
       result.push(cfg);
+    }
+
+    // Parques: ciclistas por la ciclorruta.
+    for (const row of grid.PARK) {
+      result.push({
+        row: row,
+        type: "cyclist",
+        dir: random([-1, 1]),
+        speed: random(0.07, 0.11) * speedFactor,
+        count: 1 + floor(number / 7)
+      });
+    }
+
+    // Andenes: peatones.
+    for (const row of grid.MEDIAN) {
+      result.push({
+        row: row,
+        type: "people",
+        kinds: LevelManager.PEOPLE,
+        dir: random([-1, 1]),
+        speed: random(0.02, 0.04),
+        count: loc.people
+      });
     }
 
     return result;

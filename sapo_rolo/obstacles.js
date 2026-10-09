@@ -1,5 +1,6 @@
-// Obstáculos móviles: carros, camiones y troncos, organizados en
-// carriles (Lane) dentro de una cuadrícula de filas.
+// Obstáculos móviles de Bogotá: Spark GT (y taxis), motos NS 200,
+// buses SITP, TransMilenio, ciclistas, peatones y troncos,
+// organizados en carriles (Lane) dentro de una cuadrícula de filas.
 //
 // Uso rápido (desde sapo_rolo.js):
 //   obstacles = createObstacles(level.obstacles);
@@ -31,9 +32,10 @@ class Obstacle {
       g.noStroke();
 
       for (let j = 0; j < rows.length; j++) {
-        const line = flip
-          ? [...rows[j]].reverse().join("")
-          : rows[j];
+        let line = rows[j];
+        if (flip) {
+          line = line.split("").reverse().join("");
+        }
 
         for (let i = 0; i < line.length; i++) {
           if (line[i] !== ".") {
@@ -69,6 +71,7 @@ class Obstacle {
     // Comportamiento frente al jugador
     this.deadly = false;         // true: si lo toca, el sapo muere
     this.rideable = false;       // true: el sapo se puede subir encima
+    this.pushes = false;         // true: empuja al sapo (peatones)
     this.hitbox = 1;             // fracción del tamaño usada en colisión
 
     // Cuánto se movió en el último update (para arrastrar al sapo)
@@ -188,39 +191,36 @@ class Vehicle extends Obstacle {
 }
 
 
-// Car
-class Car extends Vehicle {
-  static preload() {
-    Car.img = undefined;
-    // Si se hace un png:
-    // loadImage("img/obstacles/car.png")
-  }
-
+// Spark GT: el carro chiquito más rolo de todos. Con la pintura
+// "taxi" sale como taxi amarillo.
+class SparkGT extends Vehicle {
   static rows = [
-    "...KK......KK...",
-    ".BBBBBBBBBBBBBB.",
-    "RBBBWWBBBBWWWBBY",
-    "BBBDWWBBBBWWWBBB",
-    "BBBDWWBBBBWWWBBB",
-    "RBBBWWBBBBWWWBBY",
-    ".BBBBBBBBBBBBBB.",
-    "...KK......KK...",
+    "..KK....KK...",
+    ".BBBBBBBBBBB.",
+    "RBBWWBBBWWBBY",
+    "BBBWWDDDWWBBB",
+    "BBBWWDDDWWBBB",
+    "RBBWWBBBWWBBY",
+    ".BBBBBBBBBBB.",
+    "..KK....KK..."
   ];
 
+  // [color de la carrocería, color del techo]
   static colors = {
-    yellow: ["#f4d03f", "#b7950b"],
-    pink:   ["#ec7ab8", "#a8457a"],
-    white:  ["#ecf0f1", "#95a5a6"],
-    blue:   ["#3498db", "#1f618d"],
+    rojo:   ["#c62828", "#8e0000"],
+    blanco: ["#eceff1", "#90a4ae"],
+    gris:   ["#78909c", "#455a64"],
+    azul:   ["#1e88e5", "#0d47a1"],
+    taxi:   ["#f7c600", "#222222"]
   };
 
   // direction: 1 derecha, -1 izquierda
-  constructor(x, y, direction = 1, colorName = "yellow") {
-    const [body, dark] = Car.colors[colorName];
+  constructor(x, y, direction = 1, colorName = "rojo") {
+    const colors = SparkGT.colors[colorName];
 
     const palette = {
-      B: body,
-      D: dark,
+      B: colors[0],
+      D: colors[1],
       W: "#aee3f5",
       K: "#1b1b1b",
       Y: "#fff6a0",
@@ -230,84 +230,272 @@ class Car extends Vehicle {
     super(
       x,
       y,
-      Car.rows,
+      SparkGT.rows,
       palette,
-      "car-" + colorName,
+      "spark-" + colorName,
       direction
     );
-
-    if (Car.img !== undefined) {
-      this.img = Car.img;
-    }
   }
 }
 
 
-// Carro de carreras: pequeño y muy rápido
-class RaceCar extends Vehicle {
+// Moto NS 200 con su piloto: pequeña y muy rápida.
+class Moto extends Vehicle {
   static rows = [
-    "..KKK......KKK..",
-    "..KKK.DDDD.KKK..",
-    "DDBBBBBBBBBBBBB.",
-    "DBBBBBWWBBBBBBBY",
-    "DBBBBBWWBBBBBBBY",
-    "DDBBBBBBBBBBBBB.",
-    "..KKK.DDDD.KKK..",
-    "..KKK......KKK..",
+    "..........",
+    "..........",
+    "....JJ....",
+    "KKMJHHJMKY",
+    "KKMMHHMMKY",
+    "....JJ....",
+    "..........",
+    ".........."
   ];
 
-  constructor(x, y, direction = 1) {
+  static colors = {
+    roja:  "#d32f2f",
+    negra: "#37474f",
+    azul:  "#1e88e5"
+  };
+
+  constructor(x, y, direction = 1, colorName = "roja") {
     const palette = {
-      B: "#e74c3c",
-      D: "#922b21",
-      W: "#1b1b1b",
+      M: Moto.colors[colorName],
       K: "#1b1b1b",
+      J: "#5d4037",
+      H: "#111111",
       Y: "#fff6a0"
     };
 
-    super(
-      x,
-      y,
-      RaceCar.rows,
-      palette,
-      "race",
-      direction
-    );
+    super(x, y, Moto.rows, palette, "moto-" + colorName, direction);
+
+    // Solo la mitad del dibujo es moto (el resto es transparente).
+    this.hitbox = 0.6;
   }
 }
 
 
-// Camión: largo y lento
-class Truck extends Vehicle {
+// Bus del SITP: largo, azul y lento.
+class Bus extends Vehicle {
   static rows = [
-    "...KKK...KKK.............KKK....",
-    "TTTTTTTTTTTTTTTTTTTTTT.BBBBBBB..",
-    "TLLLLLLLLLLLLLLLLLLLLT.BBBWWBBB.",
-    "TLLLLLLLLLLLLLLLLLLLLTDBBBWWBBBY",
-    "TLLLLLLLLLLLLLLLLLLLLTDBBBWWBBBY",
-    "TLLLLLLLLLLLLLLLLLLLLT.BBBWWBBB.",
-    "TTTTTTTTTTTTTTTTTTTTTT.BBBBBBB..",
-    "...KKK...KKK.............KKK....",
+    "..KKK...............KKK.....",
+    "BBBBBBBBBBBBBBBBBBBBBBBBBBB.",
+    "BLLLLLLLLLLLLLLLLLLLLLLLLBWY",
+    "BLLAALLLLLLLAALLLLLLLLLLLBWB",
+    "BLLAALLLLLLLAALLLLLLLLLLLBWB",
+    "BLLLLLLLLLLLLLLLLLLLLLLLLBWY",
+    "BBBBBBBBBBBBBBBBBBBBBBBBBBB.",
+    "..KKK...............KKK....."
   ];
 
   constructor(x, y, direction = 1) {
     const palette = {
-      T: "#7f8c8d",
-      L: "#d5d8dc",
-      B: "#2e86c1",
-      D: "#1b4f72",
+      B: "#1565c0",
+      L: "#90caf9",
+      A: "#607d8b",
       W: "#aee3f5",
       K: "#1b1b1b",
       Y: "#fff6a0"
     };
 
-    super(
-      x,
-      y,
-      Truck.rows,
-      palette,
-      "truck",
-      direction
+    super(x, y, Bus.rows, palette, "bus", direction);
+  }
+}
+
+
+// TransMilenio articulado: dos vagones rojos unidos por un fuelle.
+// Se arma igual que el tronco: parte de atrás + fuelle + parte de
+// adelante.
+class TransMilenio extends Vehicle {
+  static back = [
+    "..KKK.........KKK...",
+    "RRRRRRRRRRRRRRRRRRRR",
+    "RLLLLLLLLLLLLLLLLLLR",
+    "RLLAALLLLLLLLAALLLLR",
+    "RLLAALLLLLLLLAALLLLR",
+    "RLLLLLLLLLLLLLLLLLLR",
+    "RRRRRRRRRRRRRRRRRRRR",
+    "..KKK.........KKK..."
+  ];
+
+  static joint = [
+    "..",
+    "GG",
+    "GG",
+    "GG",
+    "GG",
+    "GG",
+    "GG",
+    ".."
+  ];
+
+  static front = [
+    "..KKK.........KKK...",
+    "RRRRRRRRRRRRRRRRRRR.",
+    "RLLLLLLLLLLLLLLLLRWY",
+    "RLLAALLLLLLLLLLLLRWR",
+    "RLLAALLLLLLLLLLLLRWR",
+    "RLLLLLLLLLLLLLLLLRWY",
+    "RRRRRRRRRRRRRRRRRRR.",
+    "..KKK.........KKK..."
+  ];
+
+  constructor(x, y, direction = 1) {
+    const rows = [];
+    for (let j = 0; j < 8; j++) {
+      rows.push(
+        TransMilenio.back[j] +
+        TransMilenio.joint[j] +
+        TransMilenio.front[j]
+      );
+    }
+
+    const palette = {
+      R: "#c8102e",
+      L: "#ef5350",
+      A: "#9e9e9e",
+      G: "#424242",
+      W: "#aee3f5",
+      K: "#1b1b1b",
+      Y: "#fff6a0"
+    };
+
+    super(x, y, rows, palette, "transmilenio", direction);
+  }
+}
+
+
+// Ciclista de la ciclovía: anda por los parques. Más lento que un
+// carro, pero igual tumba al sapo.
+class Cyclist extends Vehicle {
+  static rows = [
+    "........",
+    "........",
+    "...JJ...",
+    "KKFHHFKK",
+    "KKFHHFKK",
+    "...JJ...",
+    "........",
+    "........"
+  ];
+
+  static shirts = ["#fdd835", "#43a047", "#e53935", "#00acc1"];
+
+  constructor(x, y, direction = 1, shirtIndex = 0) {
+    const palette = {
+      K: "#1b1b1b",
+      F: "#9e9e9e",
+      H: "#fafafa",
+      J: Cyclist.shirts[shirtIndex]
+    };
+
+    super(x, y, Cyclist.rows, palette, "cyclist-" + shirtIndex, direction);
+
+    this.hitbox = 0.6;
+  }
+}
+
+
+// Peatones de los andenes. No matan, pero empujan al sapo cuando
+// pasan por encima de él. Hay de todo, como en cualquier andén de
+// Bogotá: oficinistas, estudiantes, señoras con sombrilla,
+// vendedores de tinto, habitantes de calle y perros.
+class Pedestrian extends Obstacle {
+  static kinds = {
+    oficinista: {
+      rows: [
+        "........",
+        "........",
+        "..SSSS..",
+        ".SSHHSS.",
+        ".SSHHSSB",
+        "..SSSS.B",
+        "........",
+        "........"
+      ],
+      palette: { S: "#37474f", H: "#3e2723", B: "#795548" }
+    },
+    estudiante: {
+      rows: [
+        "........",
+        "........",
+        "MMSSSS..",
+        "MMSHHSS.",
+        "MMSHHSS.",
+        "MMSSSS..",
+        "........",
+        "........"
+      ],
+      palette: { S: "#8e24aa", H: "#212121", M: "#ff7043" }
+    },
+    sombrilla: {
+      rows: [
+        "..UUUU..",
+        ".UUUUUU.",
+        "UUUUUUUU",
+        "UUUUKUUU",
+        "UUUUUUUU",
+        ".UUUUUU.",
+        "..UUUU..",
+        "........"
+      ],
+      palette: { U: "#5c6bc0", K: "#212121" }
+    },
+    vendedor: {
+      rows: [
+        "............",
+        "............",
+        "..SSSS.CCCCC",
+        ".SSHHSSCTTCC",
+        ".SSHHSSCTTCC",
+        "..SSSS.CCCCC",
+        "............",
+        "............"
+      ],
+      palette: { S: "#c62828", H: "#4e342e", C: "#8d6e63", T: "#e0e0e0" }
+    },
+    habitante: {
+      rows: [
+        "........",
+        "........",
+        "XXXSSSS.",
+        "XXSSHHSS",
+        "XXSSHHSS",
+        "XXXSSSS.",
+        "........",
+        "........"
+      ],
+      palette: { S: "#6d4c41", H: "#424242", X: "#d7ccc8" }
+    },
+    perro: {
+      rows: [
+        ".........",
+        ".........",
+        "T.DDDDD..",
+        ".DDDDDDHH",
+        ".DDDDDDHH",
+        "..D...D..",
+        ".........",
+        "........."
+      ],
+      palette: { D: "#a1887f", H: "#795548", T: "#a1887f" }
+    }
+  };
+
+  constructor(x, y, direction = 1, kind = "oficinista") {
+    const data = Pedestrian.kinds[kind];
+    const p = Obstacle.pixelSize();
+
+    super(x, y, data.rows[0].length * p, data.rows.length * p);
+
+    this.pushes = true;
+    this.hitbox = 0.7;
+
+    this.img = Obstacle.buildSprite(
+      "person-" + kind,
+      data.rows,
+      data.palette,
+      direction < 0
     );
   }
 }
@@ -368,11 +556,10 @@ class Log extends Obstacle {
   constructor(x, y, direction = 1, size = "medium") {
     const n = Log.sizes[size];
 
-    const rows = Log.middle.map((mid, j) =>
-      Log.leftEnd[j] +
-      mid.repeat(n) +
-      Log.rightEnd[j]
-    );
+    const rows = [];
+    for (let j = 0; j < 8; j++) {
+      rows.push(Log.leftEnd[j] + Log.middle[j].repeat(n) + Log.rightEnd[j]);
+    }
 
     const p = Obstacle.pixelSize();
 
@@ -419,14 +606,12 @@ class Lane {
     const offset = random(span);
 
     for (let i = 0; i < count; i++) {
-      const o = i === 0
-        ? sample
-        : make(0, y, direction);
+      let o = sample;
+      if (i > 0) {
+        o = make(0, y, direction);
+      }
 
-      o.x =
-        -o.width / 2 +
-        (offset + i * span / count) % span;
-
+      o.x = -o.width / 2 + (offset + i * span / count) % span;
       o.velocityX = direction * speed * sizeX(1);
 
       this.obstacles.push(o);
@@ -448,21 +633,21 @@ function createObstacles(obstacleConfig) {
     let make;
 
     if (cfg.type === "log") {
-      make = (x, y, d) => {
-        return new Log(x, y, d, cfg.size);
-      };
-    } else if (cfg.type === "car") {
-      make = (x, y, d) => {
-        return new Car(x, y, d, cfg.color);
-      };
-    } else if (cfg.type === "truck") {
-      make = (x, y, d) => {
-        return new Truck(x, y, d);
-      };
-    } else if (cfg.type === "race") {
-      make = (x, y, d) => {
-        return new RaceCar(x, y, d);
-      };
+      make = (x, y, d) => new Log(x, y, d, cfg.size);
+    } else if (cfg.type === "spark") {
+      make = (x, y, d) => new SparkGT(x, y, d, cfg.color);
+    } else if (cfg.type === "moto") {
+      make = (x, y, d) => new Moto(x, y, d, cfg.color);
+    } else if (cfg.type === "bus") {
+      make = (x, y, d) => new Bus(x, y, d);
+    } else if (cfg.type === "transmilenio") {
+      make = (x, y, d) => new TransMilenio(x, y, d);
+    } else if (cfg.type === "cyclist") {
+      // Cada ciclista con una camiseta distinta.
+      make = (x, y, d) => new Cyclist(x, y, d, floor(random(Cyclist.shirts.length)));
+    } else if (cfg.type === "people") {
+      // Cada peatón es de un tipo al azar de la lista del nivel.
+      make = (x, y, d) => new Pedestrian(x, y, d, random(cfg.kinds));
     } else {
       continue;
     }
@@ -475,7 +660,9 @@ function createObstacles(obstacleConfig) {
       cfg.count
     );
 
-    result.push(...lane.obstacles);
+    for (const o of lane.obstacles) {
+      result.push(o);
+    }
   }
 
   return result;
