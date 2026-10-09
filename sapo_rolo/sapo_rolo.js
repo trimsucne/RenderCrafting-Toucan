@@ -67,9 +67,9 @@ let ui = [];
 
 function preload() {
   // Preloads de las implementaciones de los modelos.
-  // Obstacle.preload();
-  // Player.preload();
-  // Background.preload();
+  Obstacle.preload();
+  Player.preload();
+  Background.preload();
 }
 
 
@@ -98,16 +98,28 @@ function draw() {
 // Igual que draw(), la entrada se delega al estado actual.
 function keyPressed() {
   state.keyPressed(key);
+
+  // Evita que las flechas y la barra espaciadora desplacen la página.
+  if ([UP_ARROW, DOWN_ARROW, LEFT_ARROW, RIGHT_ARROW, 32].includes(keyCode)) {
+    return false;
+  }
+}
+
+
+// Reinicia lo que se acumula entre niveles (vidas y puntaje).
+function resetGame() {
+  lifes = 3;
+  resetScore();
 }
 
 
 // Conversión de coordenadas normalizadas a píxeles.
 function mapX(x) {
-  return MARGINX + (x * (width - MARGINX));
+  return MARGINX + (x * (width - 2 * MARGINX));
 }
 
 function mapY(y) {
-  return MARGINY + (y * (height - MARGINY));
+  return MARGINY + (y * (height - 2 * MARGINY));
 }
 
 function sizeX(x) {
@@ -132,30 +144,16 @@ function loadLevel(level) {
   obstacles = createObstacles(level.obstacles);
 
   // Jugador (player.js)
-  // frog = createPlayer(level.player, lifes);
-  // Auxiliar para probar mientras tanto:
-  frog = new Player(
-    mapX(0.5),
-    mapY(0.95),
-    sizeX(0.05),
-    sizeY(0.04),
-    lifes
-  );
-  
-  // Background (background.js)
-  // landscape = createBackground(level.background);
-  // Auxiliar para probar mientras tanto:
-  landscape = new Background(
-    mapX(0),
-    mapY(0),
-    sizeX(1),
-    sizeY(1)
-  );
+  frog = createPlayer(level.player, lifes);
 
-  // UI (background.js o manager.js)
-  // ui = createUI(level.ui);
-  // Auxiliar para probar mientras tanto:
-  ui = [];
+  // Background (background.js)
+  landscape = createBackground(level.background);
+
+  // UI (background.js)
+  ui = createUI(level.ui);
+
+  // Puntaje y reloj del nivel (manager.js)
+  startLevel(frog);
 }
 
 
@@ -189,11 +187,14 @@ class StateManager {
     },
     lose: {
       RETRY: (parent) => {
+        resetGame();
         return new PlayState(parent);
       }
     },
     pause: {
       INIT: (parent) => {
+        parent.level = 0;
+        resetGame();
         return new InitState(parent);
       },
       BACK: (parent) => {
@@ -290,26 +291,7 @@ class InitState {
 
   // Renderizado de la pantalla inicial.
   draw() {
-    background(192);
-
-    // TODO:
-    // Implementar la pantalla inicial en manager.js.
-    //
-    // Ejemplo:
-    // drawInitialUI();
-
-    // Auxiliar para probar mientras tanto:
-    push();
-
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    fill(0);
-    text("Sapo Rolo", width / 2, height / 2 - 40);
-
-    textSize(18);
-    text("Presiona ENTER para comenzar", width / 2, height / 2 + 10);
-
-    pop();
+    drawInitialUI();
   }
 
   // Entrada de la pantalla inicial.
@@ -348,22 +330,16 @@ class PlayState {
       frog.update();
       frog.draw();
     }
-    // Colisiones
+    // Colisiones (manager.js)
+    const result = manageCollisions(frog, obstacles);
 
-    // TODO:
-    // La lógica de colisiones debería estar en manager.js.
-    //
-    // Ejemplo:
-    //
-    // const result = manageCollisions(frog, obstacles);
-    //
-    // if (result === "DIE") {
-    //   state.change("DIE");
-    // }
-    //
-    // if (result === "WIN") {
-    //   state.change("WIN");
-    // }
+    if (result === "DIE") {
+      state.change("DIE");
+    }
+
+    if (result === "WIN") {
+      state.change("WIN");
+    }
 
     // UI
     for (const element of ui) {
@@ -374,14 +350,10 @@ class PlayState {
 
   // Entrada durante la partida.
   keyPressed(key) {
-
-    // TODO:
-    // La entrada específica del jugador debería delegarse a
-    // player.js.
-    //
-    // Ejemplo:
-    //
-    // frog.keyPressed(key);
+    // Movimiento del jugador (player.js).
+    if (frog !== undefined) {
+      frog.keyPressed(key);
+    }
 
     // Pausa general del juego.
     if (key === "p" || key === "P") {
@@ -399,30 +371,7 @@ class GoodEndState {
 
   // Renderizado de la pantalla de victoria.
   draw() {
-    background(192);
-
-    // TODO:
-    // La pantalla de victoria debería ser implementada por manager.js.
-    //
-    // Ejemplo:
-    // win(this.level);
-
-    // Auxiliar para probar mientras tanto:
-    push();
-
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    fill(0);
-    text("¡Nivel completado!", width / 2, height / 2 - 40);
-
-    textSize(18);
-    text(
-      "Presiona ENTER para continuar",
-      width / 2,
-      height / 2 + 10
-    );
-
-    pop();
+    win(this.level);
   }
 
   // Entrada de la pantalla de victoria.
@@ -442,30 +391,7 @@ class BadEndState {
 
   // Renderizado de la pantalla de derrota.
   draw() {
-    background(192);
-
-    // TODO:
-    // La pantalla de derrota debería ser implementada por manager.js.
-    //
-    // Ejemplo:
-    // lose(this.level, lifes);
-
-    // Auxiliar para probar mientras tanto:
-    push();
-
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    fill(0);
-    text("Perdiste", width / 2, height / 2 - 40);
-
-    textSize(18);
-    text(
-      "Presiona ENTER para intentar de nuevo",
-      width / 2,
-      height / 2 + 10
-    );
-
-    pop();
+    lose(this.level);
   }
 
   // Entrada de la pantalla de derrota.
@@ -496,34 +422,12 @@ class PauseState {
     if (frog !== undefined) {
       frog.draw();
     }
+    for (const element of ui) {
+      element.draw();
+    }
 
-    // UI de pausa.
-    //
-    // TODO:
-    // Implementar en manager.js.
-    //
-    // Ejemplo:
-    // pause();
-
-    // Auxiliar para probar mientras tanto:
-    push();
-
-    fill(0, 150);
-    rect(width / 2, height / 2, width, height);
-
-    fill(255);
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    text("PAUSA", width / 2, height / 2 - 20);
-
-    textSize(18);
-    text(
-      "Presiona P para continuar",
-      width / 2,
-      height / 2 + 30
-    );
-
-    pop();
+    // UI de pausa (manager.js).
+    pause();
   }
 
   // Entrada durante la pausa.
@@ -552,6 +456,9 @@ class LevelManager {
   // Se almacenan los "generadores" y no los objetos.
   static levels = [];
 
+  // Máximo de filas que puede tener un nivel.
+  static MAX_ROWS = 20;
+
   constructor() {
     this.current = 0;
     this.levels = LevelManager.levels;
@@ -577,37 +484,22 @@ class LevelManager {
       grid: grid,
       // Configuración de obstáculos.
       obstacles: this.generateObstacleConfig(number, grid),
-      // Configuración del jugador.
-      //
-      // TODO:
-      // Cuando player.js tenga su sistema de configuración,
-      // se agregarán aquí sus parámetros.
-      //
-      // player: {
-      //   x: 0.5,
-      //   y: 0.95,
-      //   width: 0.05,
-      //   height: 0.04
-      // },
-
-      // Configuración del background.
-      //
-      // TODO:
-      // Cuando background.js tenga su sistema de configuración,
-      // se agregarán aquí sus parámetros.
-      //
-      // background: {
-      //   ...
-      // },
-
-      // Configuración de la UI.
-      //
-      // TODO:
-      // Cuando background.js tenga...
-      //
-      // ui: {
-      //   ...
-      // }
+      // Configuración del jugador (player.js): columna inicial
+      // (normalizada) y especie, que se alterna en cada nivel.
+      player: {
+        x: 0.5,
+        type: number % 2 === 0 ? "green" : "golden"
+      },
+      // Configuración del background (background.js): la paleta
+      // cambia cada dos niveles (día, atardecer, noche).
+      background: {
+        theme: ["day", "sunset", "night"][floor(number / 2) % 3]
+      },
+      // Configuración de la UI (background.js).
+      ui: {
+        level: number,
+        timer: true
+      }
     };
 
     this.levels.push(level);
@@ -625,8 +517,9 @@ class LevelManager {
   // - mínimo un andén entre las zonas peligrosas.
   generateGridConfig(level) {
 
-    // El nivel determina directamente la cantidad total de filas.
-    const rows = 12 + level;
+    // El nivel determina directamente la cantidad total de filas
+    // (con un máximo para que las filas no queden diminutas).
+    const rows = min(12 + level, LevelManager.MAX_ROWS);
 
     const river = [];
     const road = [];
@@ -638,7 +531,7 @@ class LevelManager {
 
     let row = 1;
 
-    // La estructura se construye desde el inicio hacia la meta.
+    // La estructura se construye desde la meta hacia el inicio.
     // Cada bloque peligroso tiene como mínimo dos filas.
     // Los bloques están separados por al menos un andén.
     let currentType = random() < 0.5 ? "road" : "river";
@@ -659,7 +552,12 @@ class LevelManager {
 
       // El tamaño del bloque es aleatorio, pero siempre
       // tiene como mínimo dos filas.
-      const count = floor(random(2, maxBlockSize + 1));
+      // Nunca más filas de las que quedan (si no, el bloque
+      // se comería la fila de inicio o se saldría de la grilla).
+      const count = min(
+        floor(random(2, maxBlockSize + 1)),
+        remainingRows
+      );
 
       for (let i = 0; i < count; i++) {
 
