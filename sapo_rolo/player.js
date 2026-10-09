@@ -1,12 +1,16 @@
 // Jugador: el sapo. Se mueve a saltos de una casilla (como el
-// Frogger arcade), se deja llevar por los troncos y tiene vidas.
+// Frogger arcade), se deja llevar por los troncos, lo empujan los
+// peatones y tiene vidas.
+//
+// Hay un sapo por cada equipo de la capital, según la zona de la
+// localidad: Santa Fe (rojo, norte), Equidad (verde, centro) y
+// Millonarios (azul, sur).
 //
 // Uso rápido (desde sapo_rolo.js):
 //   frog = createPlayer(level.player, lifes);
 //
 // La entrada llega desde PlayState.keyPressed() -> frog.keyPressed(key)
-// y las colisiones (cuándo muere, cuándo lo arrastra un tronco)
-// las decide manager.js.
+// y las colisiones las decide manager.js.
 
 
 // Player (sus métodos se pueden sobreescribir o extender
@@ -16,26 +20,15 @@ class Player {
     Player.img = undefined;
   }
 
-  // Columnas imaginarias en que se divide el ancho del mapa:
-  // un salto lateral avanza exactamente una columna.
+  // El ancho del mapa se divide en 17 columnas: un salto lateral
+  // avanza una columna (850 / 17 = 50 px).
   static COLUMNS = 17;
 
-  // Duración (segundos) de un salto y de la animación de muerte.
+  // Duración (en segundos) de un salto y de la animación de muerte.
   static HOP_TIME = 0.12;
   static DEATH_TIME = 0.9;
 
-  // Movimientos: cuántas columnas (dx) y filas (dy) avanza, hacia
-  // dónde mira el sapo (angle) y qué teclas lo producen.
-  // (Se usa Math.PI porque las constantes de p5 todavía no existen
-  // cuando se lee este archivo.)
-  static MOVES = {
-    up:    { dx: 0,  dy: -1, angle: 0,             keys: ["ArrowUp", "w", "W"] },
-    down:  { dx: 0,  dy: 1,  angle: Math.PI,       keys: ["ArrowDown", "s", "S"] },
-    left:  { dx: -1, dy: 0,  angle: -Math.PI / 2,  keys: ["ArrowLeft", "a", "A"] },
-    right: { dx: 1,  dy: 0,  angle: Math.PI / 2,   keys: ["ArrowRight", "d", "D"] }
-  };
-
-  // Calavera que aparece al morir (igual para todos los sapos).
+  // Calavera que aparece al morir.
   static skullRows = [
     "..WWWWW..",
     ".WWWWWWW.",
@@ -52,20 +45,6 @@ class Player {
     K: "#1b1b1b"
   };
 
-  // Ancho de un salto lateral en pixeles.
-  static step() {
-    return sizeX(1 / Player.COLUMNS);
-  }
-
-  static skull() {
-    return Obstacle.buildSprite(
-      "skull",
-      Player.skullRows,
-      Player.skullPalette,
-      false
-    );
-  }
-
   constructor(x, y, width, height, lifes) {
     this.x = x;
     this.y = y;
@@ -77,22 +56,22 @@ class Player {
     this.startX = x;
     this.startRow = GRID.rowOf(y);
 
-    // Fila de la grilla en la que está (o a la que está saltando).
+    // Fila en la que está (o a la que está saltando).
     this.row = this.startRow;
 
-    // Hacia dónde mira (radianes, 0 = arriba).
+    // Hacia dónde mira (en radianes, 0 = arriba).
     this.angle = 0;
 
-    // Salto en curso: null o { fromX, fromY, toX, toY, t } con t en [0, 1].
+    // Salto en curso: null si está quieto. Si está saltando es un
+    // objeto con el origen, el destino y el progreso t (de 0 a 1).
     this.hop = null;
 
     // Muerte en curso.
     this.dying = false;
     this.deathTimer = 0;
-    this.deathCause = undefined;   // "hit", "water", "drift" o "time"
+    this.deathCause = "";   // "hit", "water", "drift" o "time"
 
-    // Fracción del tamaño que cuenta para chocar con vehículos
-    // (más pequeña que el dibujo, para que sea justo).
+    // Fracción del tamaño que cuenta para chocar.
     this.hitbox = 0.6;
 
     // A definir en las implementaciones
@@ -101,50 +80,52 @@ class Player {
     // Opcionales (pueden añadir más que utilicen internamente)
     // en las hijas.
     this.tint = undefined;
-    this.fallbackColor = "#43a047";
   }
 
-  // Entrada: convierte la tecla en un movimiento.
+  // Ancho de un salto lateral en pixeles.
+  stepSize() {
+    return sizeX(1 / Player.COLUMNS);
+  }
+
+  // Entrada: flechas o WASD.
   keyPressed(key) {
     // No se puede saltar mientras se está en el aire o muriendo.
     if (this.dying || this.hop !== null) {
       return;
     }
 
-    for (const name in Player.MOVES) {
-      const move = Player.MOVES[name];
-      if (move.keys.includes(key)) {
-        this.move(move);
-        return;
-      }
+    if (key === "ArrowUp" || key === "w" || key === "W") {
+      this.jump(0, -1, 0);
+    } else if (key === "ArrowDown" || key === "s" || key === "S") {
+      this.jump(0, 1, PI);
+    } else if (key === "ArrowLeft" || key === "a" || key === "A") {
+      this.jump(-1, 0, -HALF_PI);
+    } else if (key === "ArrowRight" || key === "d" || key === "D") {
+      this.jump(1, 0, HALF_PI);
     }
   }
 
-  // Empieza un salto hacia la casilla vecina (sin salirse del mapa).
-  move(move) {
-    this.angle = move.angle;
+  // Empieza un salto: dx columnas y dy filas (dy = -1 es hacia arriba).
+  jump(dx, dy, angle) {
+    this.angle = angle;
 
-    const half = Player.step() / 2;
-    const toRow = constrain(this.row + move.dy, 0, GRID.ROWS - 1);
-    const toX = constrain(
-      this.x + move.dx * Player.step(),
-      half,
-      width - half
-    );
+    const half = this.stepSize() / 2;
+    const newRow = constrain(this.row + dy, 0, GRID.ROWS - 1);
+    const newX = constrain(this.x + dx * this.stepSize(), half, width - half);
 
     // Contra un borde: solo gira.
-    if (toRow === this.row && toX === this.x) {
+    if (newRow === this.row && newX === this.x) {
       return;
     }
 
     this.hop = {
       fromX: this.x,
       fromY: this.y,
-      toX: toX,
-      toY: GRID.rowY(toRow),
+      toX: newX,
+      toY: GRID.rowY(newRow),
       t: 0
     };
-    this.row = toRow;
+    this.row = newRow;
   }
 
   update() {
@@ -166,10 +147,18 @@ class Player {
     }
   }
 
-  // Lo mueve un tronco (dx = lo que se movió el tronco este frame).
+  // Lo arrastra un tronco (dx = lo que se movió el tronco).
   ride(dx) {
     if (!this.dying && this.hop === null) {
       this.x += dx;
+    }
+  }
+
+  // Lo empuja un peatón: se mueve, pero nunca se sale del mapa.
+  pushedBy(dx) {
+    if (!this.dying && this.hop === null) {
+      const half = this.stepSize() / 2;
+      this.x = constrain(this.x + dx, half, width - half);
     }
   }
 
@@ -181,7 +170,6 @@ class Player {
     return this.dying;
   }
 
-  // ¿Ya terminó la animación de muerte?
   deathFinished() {
     return this.dying && this.deathTimer <= 0;
   }
@@ -191,7 +179,6 @@ class Player {
     return this.x < 0 || this.x > width;
   }
 
-  // Tamaño del rectángulo de colisión.
   hitboxWidth() {
     return this.width * this.hitbox;
   }
@@ -220,7 +207,7 @@ class Player {
     this.hop = null;
   }
 
-  // Vuelve al punto de inicio (después de perder una vida).
+  // Vuelve al punto de inicio.
   respawn() {
     this.x = this.startX;
     this.row = this.startRow;
@@ -229,7 +216,7 @@ class Player {
     this.hop = null;
     this.dying = false;
     this.deathTimer = 0;
-    this.deathCause = undefined;
+    this.deathCause = "";
   }
 
   draw() {
@@ -242,27 +229,25 @@ class Player {
 
     if (this.dying) {
       this.drawDeath();
-      pop();
-      return;
-    }
-
-    rotate(this.angle);
-
-    // En el aire se ve un poco más grande.
-    if (this.hop !== null) {
-      scale(1 + 0.25 * sin(this.hop.t * PI));
-    }
-
-    if (this.tint !== undefined) {
-      tint(this.tint);
-    }
-
-    if (this.img !== undefined) {
-      image(this.img, 0, 0, this.width, this.height);
     } else {
-      noStroke();
-      fill(this.fallbackColor);
-      rect(0, 0, this.width, this.height);
+      rotate(this.angle);
+
+      // En el aire se ve un poco más grande.
+      if (this.hop !== null) {
+        scale(1 + 0.25 * sin(this.hop.t * PI));
+      }
+
+      if (this.tint !== undefined) {
+        tint(this.tint);
+      }
+
+      if (this.img !== undefined) {
+        image(this.img, 0, 0, this.width, this.height);
+      } else {
+        noStroke();
+        fill(67, 160, 71);
+        rect(0, 0, this.width, this.height);
+      }
     }
 
     pop();
@@ -271,29 +256,31 @@ class Player {
   // Animación de muerte: ondas si se ahogó, mancha roja si lo
   // atropellaron, y la calavera encima.
   drawDeath() {
-    // k va de 0 (recién muerto) a 1 (animación terminada).
-    const k = 1 - max(0, this.deathTimer) / Player.DEATH_TIME;
+    // progress va de 0 (recién muerto) a 1 (animación terminada).
+    const progress = 1 - max(0, this.deathTimer) / Player.DEATH_TIME;
 
     if (this.deathCause === "water" || this.deathCause === "drift") {
       noFill();
-      stroke(255, 255 * (1 - k));
+      stroke(255, 255 * (1 - progress));
       strokeWeight(2);
-      circle(0, 0, this.width * (0.5 + k));
-      circle(0, 0, this.width * (0.2 + 0.6 * k));
+      circle(0, 0, this.width * (0.5 + progress));
+      circle(0, 0, this.width * (0.2 + 0.6 * progress));
     } else if (this.deathCause === "hit") {
       noStroke();
-      fill(200, 30, 30, 180 * (1 - k));
+      fill(200, 30, 30, 180 * (1 - progress));
       circle(0, 0, this.width * 1.2);
     }
 
-    const s = this.width * 0.8;
-    image(Player.skull(), 0, 0, s, s * 8 / 9);
+    const skull = Obstacle.buildSprite("skull", Player.skullRows, Player.skullPalette, false);
+    const size = this.width * 0.8;
+    image(skull, 0, 0, size, size * 8 / 9);
   }
 }
 
 // Implementaciones hijas (pueden añadir todas las que quieran).
 
-// Frog: sapo en pixelart. Cada especie solo cambia la paleta.
+// Frog: el sapo en pixelart. Los tres equipos usan el mismo dibujo
+// con distinta paleta; la panza blanca es la camiseta.
 class Frog extends Player {
   static rows = [
     "...OO...OO...",
@@ -311,66 +298,71 @@ class Frog extends Player {
   ];
 
   static palettes = {
-    green: {
-      O: "#1e5a1e",
-      G: "#4caf50",
-      D: "#2e7d32",
-      L: "#c5e1a5",
-      F: "#388e3c",
+    // Santa Fe: rojo y blanco.
+    santafe: {
+      O: "#7f0000",
+      G: "#d32f2f",
+      D: "#9a0007",
+      L: "#ffffff",
+      F: "#b71c1c",
       W: "#ffffff",
       K: "#111111"
     },
-    // Rana dorada (Phyllobates terribilis), del Pacífico colombiano.
-    golden: {
-      O: "#7a5200",
-      G: "#f4c20d",
-      D: "#c79100",
-      L: "#fff3b0",
-      F: "#e0a800",
+    // Equidad: verde y blanco.
+    equidad: {
+      O: "#0b4d1e",
+      G: "#2e9e44",
+      D: "#1b6e2e",
+      L: "#ffffff",
+      F: "#23803a",
+      W: "#ffffff",
+      K: "#111111"
+    },
+    // Millonarios: azul y blanco.
+    millonarios: {
+      O: "#0d2c6b",
+      G: "#1e5bb8",
+      D: "#123f8a",
+      L: "#ffffff",
+      F: "#174a9e",
       W: "#ffffff",
       K: "#111111"
     }
   };
 
-  static sprite(type) {
-    const palette = Frog.palettes[type] || Frog.palettes.green;
-    return Obstacle.buildSprite("frog-" + type, Frog.rows, palette, false);
+  // Nombre de cada equipo para mostrar en pantalla.
+  static teamNames = {
+    santafe: "Santa Fe",
+    equidad: "Equidad",
+    millonarios: "Millonarios"
+  };
+
+  // Imagen del sapo de un equipo (la usan también el HUD y las pantallas).
+  static sprite(team) {
+    let palette = Frog.palettes[team];
+    if (palette === undefined) {
+      palette = Frog.palettes.equidad;
+    }
+    return Obstacle.buildSprite("frog-" + team, Frog.rows, palette, false);
   }
 
-  constructor(x, y, lifes, type = "green") {
+  constructor(x, y, lifes, team) {
     // El sapo ocupa el 80% del alto de una fila.
     const p = GRID.rowHeight() * 0.8 / Frog.rows.length;
 
     super(x, y, Frog.rows[0].length * p, Frog.rows.length * p, lifes);
 
-    this.type = type;
-    this.img = Frog.sprite(type);
-  }
-}
-
-// FrogGreen
-class FrogGreen extends Frog {
-  constructor(x, y, lifes) {
-    super(x, y, lifes, "green");
-  }
-}
-
-// FrogDorada
-class FrogDorada extends Frog {
-  constructor(x, y, lifes) {
-    super(x, y, lifes, "golden");
+    this.team = team;
+    this.img = Frog.sprite(team);
   }
 }
 
 
 // Crea el jugador a partir de la configuración guardada en el nivel.
 // Siempre aparece en la fila de inicio de la grilla.
-function createPlayer(playerConfig = {}, lifes = 3) {
-  const x = mapX(playerConfig.x ?? 0.5);
+function createPlayer(playerConfig, lifes) {
+  const x = mapX(playerConfig.x);
   const y = GRID.rowY(GRID.START[0]);
 
-  if (playerConfig.type === "golden") {
-    return new FrogDorada(x, y, lifes);
-  }
-  return new FrogGreen(x, y, lifes);
+  return new Frog(x, y, lifes, playerConfig.team);
 }
