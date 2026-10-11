@@ -66,10 +66,20 @@ let ui = [];
 
 
 function preload() {
-  // Preloads de las implementaciones de los modelos.
-  Obstacle.preload();
+  Car.preload();
+  RaceCar.preload();
+  Truck.preload();
+  Log.preload();
+
   Player.preload();
+  Frog.preload();
+  
   Background.preload();
+  Grass.preload();
+  Goal.preload();
+  Water.preload();
+  Road.preload();
+  Sidewalk.preload();
 }
 
 
