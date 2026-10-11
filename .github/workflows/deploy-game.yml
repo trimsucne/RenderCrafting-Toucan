@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'sapo-rolo/**'
+      - 'sapo_rolo/**'
       - '.github/workflows/deploy-game.yml'
   workflow_dispatch:
 

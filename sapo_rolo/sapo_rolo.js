@@ -68,6 +68,8 @@ let introGif;
 let introStartTime;
 let showIntro = true;
 
+let menuGif;
+let selectedLevel = -1;
 
 
 function preload() {
@@ -87,6 +89,7 @@ function preload() {
   Sidewalk.preload();
   
   introGif = loadImage("img/intro.gif");
+  menuGif = loadImage("img/menu.gif");
 }
 
 
@@ -121,6 +124,16 @@ function keyPressed() {
   if ([UP_ARROW, DOWN_ARROW, LEFT_ARROW, RIGHT_ARROW, 32].includes(keyCode)) {
     return false;
   }
+}
+
+
+// Entrada del ratón.
+// La entrada se delega al estado actual.
+function mousePressed() {
+  state.mousePressed();
+
+  // Evita que el navegador gestione el clic por defecto.
+  return false;
 }
 
 
@@ -186,7 +199,7 @@ class StateManager {
   static states = {
     initial: {
       PLAY: (parent) => {
-        return new PlayState(parent);
+        return new PlayState(parent, max(selectedLevel, 0));
       }
     },
     playing: {
@@ -299,6 +312,15 @@ class StateManager {
       this.current.keyPressed(key);
     }
   }
+  
+  
+  // Delegación de la entrada del ratón al estado actual.
+  mousePressed() {
+    if (this.current !== undefined &&
+        this.current.mousePressed !== undefined) {
+      this.current.mousePressed();
+    }
+  }
 }
 
 
@@ -307,6 +329,7 @@ class StateManager {
 // Initial State
 class InitState {
   constructor(parent) {
+    this.parent = parent;
     this.level = parent.level;
   }
 
@@ -317,10 +340,30 @@ class InitState {
 
   // Entrada de la pantalla inicial.
   keyPressed(key) {
-    if (key === "Enter" && !showIntro) {
-      state.change("PLAY");
-    } else {
-      showIntro = false;
+    if (showIntro) {
+      // ENTER permite saltar la intro.
+      if (key === "Enter") {
+        showIntro = false;
+      }
+      return;
+    }
+
+    // ENTER inicia el nivel seleccionado.
+    if (key === "Enter") {
+      this.parent.change("PLAY");
+    }
+  }
+
+  // Entrada del ratón en la pantalla inicial.
+  mousePressed() {
+    if (showIntro) {
+      return;
+    }
+
+    selectedLevel = getSelectedLevel();
+
+    if (selectedLevel > -1) {
+      this.parent.change("PLAY");
     }
   }
 }
@@ -328,11 +371,12 @@ class InitState {
 
 // Playing State
 class PlayState {
-  constructor(parent) {
-    this.level = parent.level;
+  constructor(parent, level = parent.level) {
+    this.level = level;
+    parent.level = level;
     // Configuración guardada del nivel.
-    const level = levelManager.getLevel(this.level);
-    loadLevel(level);
+    const levelConfig = levelManager.getLevel(this.level);
+    loadLevel(levelConfig);
   }
 
 
@@ -640,6 +684,13 @@ class LevelManager {
       const size = sizes[
         floor(random(sizes.length))
       ];
+      
+      let curSpeed = random(0.06, 0.13) * speedFactor;
+      
+      while (result[result.length - 1] &&
+        abs(curSpeed - result[result.length - 1].speed) < 0.03) {
+        curSpeed = random(0.06, 0.13) * speedFactor;
+      }
 
       result.push({
         row: row,
@@ -651,7 +702,7 @@ class LevelManager {
           )
         ],
         dir: random() < 0.5 ? -1 : 1,
-        speed: random(0.06, 0.13) * speedFactor,
+        speed: curSpeed,
         count: floor(random(2, 5))
       });
     }

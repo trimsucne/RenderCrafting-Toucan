@@ -195,26 +195,95 @@ function drawInitialUI() {
   if (showIntro) {
     image(introGif, width/2, height/2, width, height);
 
-    // Esperar 5 segundos antes de mostrar el menú.
+    // Esperar 34 segundos antes de mostrar el menú.
     if (millis() - introStartTime >= 34000) {
       showIntro = false;
     }
 
-    return;
+    return 0;
   }
 
-  // Mostrar la pantalla de inicio después de la intro.
-  new Screen({
-    backdrop: "#12301c",
-    title: "SAPO ROLO",
-    frogs: true,
-    lines: [
-      "Cruza la carretera y el río hasta la META",
-      "Flechas o WASD: saltar    P: pausa",
-      { text: "Presiona ENTER para comenzar", color: "#fff176", blink: true },
-      { text: "Récord: " + nf(highScore, 5), color: "#a5d6a7" }
-    ]
-  }).draw();
+  // Mostrar el menú sobre el GIF, sin tapar su fondo.
+  image(menuGif, width/2, height/2, width, height);
+
+  push();
+  rectMode(CORNER);
+  
+  // Botones para seleccionar el nivel.
+  let buttonW = 150;
+  let buttonH = 48;
+  let gap = 20;
+  let totalW = buttonW * 3 + gap * 2;
+  let startX = (width - totalW) / 2;
+  let buttonY = height * 0.7;
+
+  for (let i = 0; i < 3; i++) {
+    let x = startX + i * (buttonW + gap);
+    let level = i + 1;
+
+    let hover =
+      mouseX >= x &&
+      mouseX <= x + buttonW &&
+      mouseY >= buttonY &&
+      mouseY <= buttonY + buttonH;
+
+    // Fondo semitransparente para los botones.
+    fill(18, 48, 28, hover ? 240 : 200);
+    stroke(255);
+    strokeWeight(2);
+    rect(x, buttonY, buttonW, buttonH, 10);
+
+    // Texto del nivel.
+    noStroke();
+    fill(hover ? "#fff176" : "#ffffff");
+    textAlign(CENTER, CENTER);
+    textSize(20);
+    text("NIVEL " + level, x + buttonW / 2, buttonY + buttonH / 2);
+  }
+
+  // Instrucciones debajo de los niveles.
+  textAlign(CENTER, CENTER);
+  textSize(16);
+  stroke("#000000");
+  strokeWeight(5);
+
+  fill("#ffffff");
+  text("Cruza la carretera y el río hasta la META", width / 2, buttonY + 75);
+
+  fill("#a5d6a7");
+  text("Flechas o WASD: saltar    P: pausa", width / 2, buttonY + 103);
+
+  fill("#fff176");
+  text("Récord: " + nf(highScore, 5), width / 2, buttonY + 135);
+  
+  pop();
+}
+
+// Devuelve el nivel correspondiente a la posición del ratón.
+// Devuelve -1 si no se ha pulsado ningún botón.
+function getSelectedLevel() {
+  const buttonW = 150;
+  const buttonH = 48;
+  const gap = 20;
+  const totalW = buttonW * 3 + gap * 2;
+  const startX = (width - totalW) / 2;
+  const buttonY = height * 0.7;
+
+  for (let i = 0; i < 3; i++) {
+    // Centro del botón, igual que al dibujarlo.
+    const x = startX + i * (buttonW + gap);
+
+    if (
+      mouseX >= x &&
+      mouseX <= x + buttonW &&
+      mouseY >= buttonY &&
+      mouseY <= buttonY + buttonH
+    ) {
+      return i;
+    }
+  }
+
+  return -1;
 }
 
 function win(level) {
