@@ -64,6 +64,11 @@ let landscape;
 let obstacles = [];
 let ui = [];
 
+let introGif;
+let introStartTime;
+let showIntro = true;
+
+
 
 function preload() {
   Car.preload();
@@ -80,6 +85,8 @@ function preload() {
   Water.preload();
   Road.preload();
   Sidewalk.preload();
+  
+  introGif = loadImage("img/intro.gif");
 }
 
 
@@ -93,6 +100,7 @@ function setup() {
   lifes = 3;
   levelManager = new LevelManager();
   state = new StateManager();
+  introStartTime = millis();
 }
 
 
@@ -118,6 +126,9 @@ function keyPressed() {
 
 // Reinicia lo que se acumula entre niveles (vidas y puntaje).
 function resetGame() {
+  introGif.reset();
+  introStartTime = millis();
+  showIntro = true;
   lifes = 3;
   resetScore();
 }
@@ -306,8 +317,10 @@ class InitState {
 
   // Entrada de la pantalla inicial.
   keyPressed(key) {
-    if (key === "Enter") {
+    if (key === "Enter" && !showIntro) {
       state.change("PLAY");
+    } else {
+      showIntro = false;
     }
   }
 }
@@ -605,8 +618,8 @@ class LevelManager {
   
   // Generación procedimental de la configuración de obstáculos.
   generateObstacleConfig(level, grid) {
-    const speedFactor = min(1 + 0.15 * level, 2.5);
-    const extraCars = floor(level / 2);
+    const speedFactor = min(1 + 0.1 * level, 2);
+    const extraCars = floor(level / 3);
     const logShrink = min(floor(level / 3), 2);
     const logOrder = [
       "small",

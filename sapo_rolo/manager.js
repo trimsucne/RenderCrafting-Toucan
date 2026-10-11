@@ -191,6 +191,19 @@ function manageCollisions(player, obstacles) {
 // Pantallas
 
 function drawInitialUI() {
+  // Mostrar la intro primero.
+  if (showIntro) {
+    image(introGif, width/2, height/2, width, height);
+
+    // Esperar 5 segundos antes de mostrar el menú.
+    if (millis() - introStartTime >= 34000) {
+      showIntro = false;
+    }
+
+    return;
+  }
+
+  // Mostrar la pantalla de inicio después de la intro.
   new Screen({
     backdrop: "#12301c",
     title: "SAPO ROLO",
