@@ -15,42 +15,8 @@ class Obstacle {
   static preload() {
     Obstacle.img = undefined;
   }
-
-  // Los sprites son dibujos en pixelart definidos como texto:
-  // cada caracter es un pixel y su color sale de la paleta
-  // ('.' es transparente). Se dibujan una sola vez en una imagen
-  // pequeña y luego se escalan, así no se recalculan cada frame.
-  static spriteCache = {};
-
-  static buildSprite(key, rows, palette, flip) {
-    const cacheKey = key + (flip ? "<" : ">");
-
-    if (Obstacle.spriteCache[cacheKey] === undefined) {
-      const g = createGraphics(rows[0].length, rows.length);
-      g.pixelDensity(1);
-      g.noStroke();
-
-      for (let j = 0; j < rows.length; j++) {
-        const line = flip
-          ? [...rows[j]].reverse().join("")
-          : rows[j];
-
-        for (let i = 0; i < line.length; i++) {
-          if (line[i] !== ".") {
-            g.fill(palette[line[i]]);
-            g.rect(i, j, 1, 1);
-          }
-        }
-      }
-
-      Obstacle.spriteCache[cacheKey] = g;
-    }
-
-    return Obstacle.spriteCache[cacheKey];
-  }
-
-  // Tamaño de un pixel del sprite en pantalla (8 pixeles de alto
-  // ocupan el 80% de la fila).
+  // Tamaño de un pixel del sprite en pantalla.
+  // Los sprites originales tienen 8 píxeles de alto.
   static pixelSize() {
     return GRID.rowHeight() * 0.8 / 8;
   }
@@ -61,7 +27,7 @@ class Obstacle {
     this.width = width;
     this.height = height;
 
-    // A definir en las implementaciones
+    // Imagen del obstáculo.
     this.img = undefined;
     this.velocityX = 0;          // píxeles por segundo
     this.velocityY = 0;
@@ -123,13 +89,22 @@ class Obstacle {
     return list.filter((o) => o.overlaps(x, y, w, h));
   }
 
+  // Calcula las dimensiones en pantalla a partir de la imagen.
+  // Se conserva la proporción original del sprite.
+  static imageSize(img) {
+    const height = GRID.rowHeight() * 0.8;
+    const width = height * img.width / img.height;
+
+    return { width, height };
+  }
+
   draw() {
     push();
 
     imageMode(CENTER);
     rectMode(CENTER);
 
-    // Sin suavizado para que el pixelart se vea nítido
+    // Sin suavizado para que el pixelart se vea nítido.
     drawingContext.imageSmoothingEnabled = false;
 
     if (this.tint !== undefined) {
@@ -163,152 +138,101 @@ class Obstacle {
 // Implementaciones hijas
 
 
-// Vehículos (base común: matan al tocarlos)
+// Vehículos (base común: matan al tocarlos).
 class Vehicle extends Obstacle {
-  constructor(x, y, rows, palette, key, direction) {
-    const p = Obstacle.pixelSize();
+  static preload() {
+    Vehicle.img = undefined;
+  }
+  constructor(x, y, img) {
+    const size = Obstacle.imageSize(img);
 
     super(
       x,
       y,
-      rows[0].length * p,
-      rows.length * p
+      size.width,
+      size.height
     );
 
     this.deadly = true;
     this.hitbox = 0.85;          // un poco permisivo, como el arcade
-
-    this.img = Obstacle.buildSprite(
-      key,
-      rows,
-      palette,
-      direction < 0
-    );
+    this.img = img;
   }
 }
 
 
 // Car
 class Car extends Vehicle {
+  static images = {};
+
   static preload() {
-    Car.img = undefined;
-    // Si se hace un png:
-    // loadImage("img/obstacles/car.png")
+    Car.images = {
+      yellow: {
+        left: loadImage("img/obstacles/car_yellow_left.png"),
+        right: loadImage("img/obstacles/car_yellow_right.png")
+      },
+      pink: {
+        left: loadImage("img/obstacles/car_pink_left.png"),
+        right: loadImage("img/obstacles/car_pink_right.png")
+      },
+      white: {
+        left: loadImage("img/obstacles/car_white_left.png"),
+        right: loadImage("img/obstacles/car_white_right.png")
+      },
+      blue: {
+        left: loadImage("img/obstacles/car_blue_left.png"),
+        right: loadImage("img/obstacles/car_blue_right.png")
+      }
+    };
   }
 
-  static rows = [
-    "...KK......KK...",
-    ".BBBBBBBBBBBBBB.",
-    "RBBBWWBBBBWWWBBY",
-    "BBBDWWBBBBWWWBBB",
-    "BBBDWWBBBBWWWBBB",
-    "RBBBWWBBBBWWWBBY",
-    ".BBBBBBBBBBBBBB.",
-    "...KK......KK...",
-  ];
-
-  static colors = {
-    yellow: ["#f4d03f", "#b7950b"],
-    pink:   ["#ec7ab8", "#a8457a"],
-    white:  ["#ecf0f1", "#95a5a6"],
-    blue:   ["#3498db", "#1f618d"],
-  };
-
-  // direction: 1 derecha, -1 izquierda
+  // direction: 1 derecha, -1 izquierda.
   constructor(x, y, direction = 1, colorName = "yellow") {
-    const [body, dark] = Car.colors[colorName];
+    const images = Car.images[colorName] || Car.images.yellow;
+    const img = images[direction < 0 ? "left" : "right"];
 
-    const palette = {
-      B: body,
-      D: dark,
-      W: "#aee3f5",
-      K: "#1b1b1b",
-      Y: "#fff6a0",
-      R: "#e74c3c"
-    };
-
-    super(
-      x,
-      y,
-      Car.rows,
-      palette,
-      "car-" + colorName,
-      direction
-    );
-
-    if (Car.img !== undefined) {
-      this.img = Car.img;
-    }
+    super(x, y, img);
   }
 }
 
 
-// Carro de carreras: pequeño y muy rápido
+// Carro de carreras: pequeño y muy rápido.
 class RaceCar extends Vehicle {
-  static rows = [
-    "..KKK......KKK..",
-    "..KKK.DDDD.KKK..",
-    "DDBBBBBBBBBBBBB.",
-    "DBBBBBWWBBBBBBBY",
-    "DBBBBBWWBBBBBBBY",
-    "DDBBBBBBBBBBBBB.",
-    "..KKK.DDDD.KKK..",
-    "..KKK......KKK..",
-  ];
+  static images = {};
+
+  static preload() {
+    RaceCar.images = {
+      left: loadImage("img/obstacles/race_left.png"),
+      right: loadImage("img/obstacles/race_right.png")
+    };
+  }
 
   constructor(x, y, direction = 1) {
-    const palette = {
-      B: "#e74c3c",
-      D: "#922b21",
-      W: "#1b1b1b",
-      K: "#1b1b1b",
-      Y: "#fff6a0"
-    };
+    const img = RaceCar.images[
+      direction < 0 ? "left" : "right"
+    ];
 
-    super(
-      x,
-      y,
-      RaceCar.rows,
-      palette,
-      "race",
-      direction
-    );
+    super(x, y, img);
   }
 }
 
 
-// Camión: largo y lento
+// Camión: largo y lento.
 class Truck extends Vehicle {
-  static rows = [
-    "...KKK...KKK.............KKK....",
-    "TTTTTTTTTTTTTTTTTTTTTT.BBBBBBB..",
-    "TLLLLLLLLLLLLLLLLLLLLT.BBBWWBBB.",
-    "TLLLLLLLLLLLLLLLLLLLLTDBBBWWBBBY",
-    "TLLLLLLLLLLLLLLLLLLLLTDBBBWWBBBY",
-    "TLLLLLLLLLLLLLLLLLLLLT.BBBWWBBB.",
-    "TTTTTTTTTTTTTTTTTTTTTT.BBBBBBB..",
-    "...KKK...KKK.............KKK....",
-  ];
+  static images = {};
+
+  static preload() {
+    Truck.images = {
+      left: loadImage("img/obstacles/truck_left.png"),
+      right: loadImage("img/obstacles/truck_right.png")
+    };
+  }
 
   constructor(x, y, direction = 1) {
-    const palette = {
-      T: "#7f8c8d",
-      L: "#d5d8dc",
-      B: "#2e86c1",
-      D: "#1b4f72",
-      W: "#aee3f5",
-      K: "#1b1b1b",
-      Y: "#fff6a0"
-    };
+    const img = Truck.images[
+      direction < 0 ? "left" : "right"
+    ];
 
-    super(
-      x,
-      y,
-      Truck.rows,
-      palette,
-      "truck",
-      direction
-    );
+    super(x, y, img);
   }
 }
 
@@ -316,82 +240,32 @@ class Truck extends Vehicle {
 // Log (tronco): no mata, el sapo se sube y lo arrastra.
 // Lo que mata en el río es el agua (eso lo revisa el manager).
 class Log extends Obstacle {
-  // Se arma con: punta izquierda + N tramos del medio + punta derecha
-  static leftEnd = [
-    ".OO",
-    "OEE",
-    "OEC",
-    "OEC",
-    "OEC",
-    "OEC",
-    "OEE",
-    ".OO"
-  ];
+  static images = {};
 
-  static middle = [
-    "OOOO",
-    "ALAA",
-    "AAAS",
-    "SAAA",
-    "AASA",
-    "AAAA",
-    "LAAS",
-    "OOOO"
-  ];
-
-  static rightEnd = [
-    "OO.",
-    "EEO",
-    "CEO",
-    "CEO",
-    "CEO",
-    "CEO",
-    "EEO",
-    "OO."
-  ];
-
-  static palette = {
-    O: "#4a2a12",
-    A: "#8b5a2b",
-    L: "#a9743f",
-    S: "#6b4220",
-    E: "#d9b38c",
-    C: "#b5895a"
-  };
-
-  static sizes = {
-    small: 4,
-    medium: 6,
-    long: 9
-  };
+  static preload() {
+    Log.images = {
+      small: loadImage("img/obstacles/log_small.png"),
+      medium: loadImage("img/obstacles/log_medium.png"),
+      long: loadImage("img/obstacles/log_long.png")
+    };
+  }
 
   constructor(x, y, direction = 1, size = "medium") {
-    const n = Log.sizes[size];
-
-    const rows = Log.middle.map((mid, j) =>
-      Log.leftEnd[j] +
-      mid.repeat(n) +
-      Log.rightEnd[j]
-    );
-
-    const p = Obstacle.pixelSize();
+    const img = Log.images[size] || Log.images.medium;
+    const dimensions = Obstacle.imageSize(img);
 
     super(
       x,
       y,
-      rows[0].length * p,
-      rows.length * p
+      dimensions.width,
+      dimensions.height
     );
 
     this.rideable = true;
 
-    // Los troncos no tienen dirección visual, no hace falta voltear
-    this.img = Obstacle.buildSprite(
-      "log-" + size,
-      rows,
-      Log.palette,
-      false
-    );
+    // Los troncos no tienen dirección visual.
+    // La dirección se utiliza para su movimiento en el carril.
+    this.img = img;
   }
 }
 
@@ -410,7 +284,7 @@ class Lane {
     const sample = make(0, y, direction);
     const span = width + sample.width;
 
-    // Que siempre quede un hueco de al menos 1.5 veces el obstáculo
+    // Que siempre quede un hueco de al menos 1.5 veces el obstáculo.
     count = max(
       1,
       min(count, floor(span / (sample.width * 2.5)))

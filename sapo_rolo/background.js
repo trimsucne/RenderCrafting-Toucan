@@ -6,77 +6,19 @@
 //   landscape = createBackground(level.background);
 //   ui = createUI(level.ui);
 //
-// Todo es pixelart generado por código: cada fila del mapa se
-// "pinta" una sola vez, pixel a pixel, en una imagen pequeña que
-// luego se escala al tamaño real de la fila.
+// Las texturas del escenario se cargan desde img/background/.
+// Cada tipo de terreno tiene sprites para los temas day, sunset y night.
 
 
 // Background (sus métodos se pueden sobreescribir o extender
 // en las clases hijas).
 class Background {
   static preload() {
-    Background.img = undefined;
   }
-
-  // Texturas ya pintadas (para no repetir el trabajo al reiniciar
-  // o al volver a un nivel con la misma forma) y colores ya
-  // convertidos a [r, g, b, a].
-  static textureCache = {};
-  static colorCache = {};
-
+  
   // Cada fila del mapa mide 10 pixeles de arte de alto.
   static pixelSize() {
     return GRID.rowHeight() / 10;
-  }
-
-  // Número pseudoaleatorio en [0, 1) que siempre es el mismo para
-  // los mismos (i, j, seed). Sirve para decorar sin tocar el
-  // random() de p5, que es el que usa la generación de niveles.
-  static hash(i, j, seed = 0) {
-    let h = Math.imul(i, 374761393) +
-      Math.imul(j, 668265263) +
-      Math.imul(seed, 1442695041);
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-  }
-
-  // "#rrggbb" -> [r, g, b, a]
-  static rgba(hex) {
-    if (Background.colorCache[hex] === undefined) {
-      const c = color(hex);
-      Background.colorCache[hex] = [red(c), green(c), blue(c), alpha(c)];
-    }
-    return Background.colorCache[hex];
-  }
-
-  // Crea (o reutiliza) una imagen de cols x rows pixeles. El color
-  // de cada pixel lo decide painter(i, j) (null = transparente).
-  static makeTexture(key, cols, rows, painter) {
-    if (Background.textureCache[key] === undefined) {
-      const img = createImage(cols, rows);
-      img.loadPixels();
-
-      for (let j = 0; j < rows; j++) {
-        for (let i = 0; i < cols; i++) {
-          const hex = painter(i, j);
-          if (hex === null) {
-            continue;
-          }
-          const [r, g, b, a] = Background.rgba(hex);
-          const k = 4 * (j * cols + i);
-          img.pixels[k] = r;
-          img.pixels[k + 1] = g;
-          img.pixels[k + 2] = b;
-          img.pixels[k + 3] = a;
-        }
-      }
-
-      img.updatePixels();
-      Background.textureCache[key] = img;
-    }
-
-    return Background.textureCache[key];
   }
 
   constructor(x, y, width, height) {
@@ -86,9 +28,7 @@ class Background {
     this.height = height;
 
     // A definir en las implementaciones
-    this.img = undefined;        // Recuerden que si ponen texturas,
-                                 // la idea es que sea pixelart
-                                 // (por lo que es arcade).
+    this.img = undefined;
 
     // Opcionales (pueden añadir más que utilicen internamente)
     // en las hijas.
@@ -125,14 +65,28 @@ class Background {
 
 
 // Terrain: una fila del mapa. Cada tipo de fila (pasto, río,
-// carretera...) es una hija que solo define paint(i, j).
+// carretera...) carga una textura desde img/background/.
 //
-// Ojo: paint() se llama dentro del constructor de Terrain, así que
-// solo puede usar this.row, this.theme, this.cols y GRID (los campos
-// que las hijas definan después de super() todavía no existen).
+// Las imágenes se cargan antes de crear el escenario mediante
+// los métodos estáticos preload() de las clases hijas.
 class Terrain extends Background {
-  // Columnas de arte extra para poder desplazar la textura (agua).
-  static EXTRA = 16;
+  // Ancho y alto de los sprites en pixeles de arte.
+  static TILE_WIDTH = 16;
+  static TILE_HEIGHT = 10;
+
+  // Carga los tres temas correspondientes a un tipo de terreno.
+  static preloadSprites(kind) {
+    const themes = ["day", "sunset", "night"];
+    const sprites = {};
+
+    for (const theme of themes) {
+      sprites[theme] = loadImage(
+        "img/background/" + theme + "_" + kind + ".png"
+      );
+    }
+
+    return sprites;
+  }
 
   constructor(row, theme) {
     super(width / 2, GRID.rowY(row), width, GRID.rowHeight());
@@ -140,17 +94,18 @@ class Terrain extends Background {
     this.row = row;
     this.theme = theme;
     this.p = Background.pixelSize();
-    this.cols = ceil(width / this.p) + Terrain.EXTRA;
+    this.cols = ceil(width / this.p) + Terrain.TILE_WIDTH;
 
     // Desplazamiento horizontal de la textura (en pixeles de pantalla).
     this.offset = 0;
 
-    this.img = Background.makeTexture(
-      this.textureKey(),
-      this.cols,
-      10,
-      (i, j) => this.paint(i, j)
-    );
+    // Selecciona el sprite correspondiente al tema del nivel.
+    this.img = this.constructor.sprites[this.theme.name];
+  }
+
+  // Cada fila del mapa mide 10 pixeles de arte de alto.
+  static pixelSize() {
+    return GRID.rowHeight() / Terrain.TILE_HEIGHT;
   }
 
   // Tipo de una fila: "goal", "river", "road", "median", "start"
@@ -169,25 +124,11 @@ class Terrain extends Background {
     return Terrain.rowType(this.row + d);
   }
 
-  // Dos filas con el mismo identificador se ven idénticas y
-  // comparten imagen.
-  textureKey() {
-    return [
-      this.constructor.name,
-      this.theme.name,
-      this.cols,
-      this.row % 4,
-      this.neighbor(-1),
-      this.neighbor(1)
-    ].join("|");
-  }
-
-  // Color del pixel (i, j) de la textura. Las hijas lo reemplazan.
-  paint(i, j) {
-    return "#ff00ff";
-  }
-
   draw() {
+    if (this.img === undefined) {
+      return;
+    }
+
     push();
 
     imageMode(CORNER);
@@ -197,14 +138,21 @@ class Terrain extends Background {
       tint(this.tint);
     }
 
+    // Repite el sprite horizontalmente para cubrir toda la fila.
     // +1 de alto para que no queden rendijas entre filas.
-    image(
-      this.img,
-      -this.offset,
-      this.y - this.height / 2,
-      this.cols * this.p,
-      this.height + 1
-    );
+    const tileWidth = Terrain.TILE_WIDTH * this.p;
+    const tileHeight = this.height + 1;
+    const start = -((this.offset % tileWidth) + tileWidth) % tileWidth;
+
+    for (let x = start; x < width; x += tileWidth) {
+      image(
+        this.img,
+        x,
+        this.y - this.height / 2,
+        tileWidth,
+        tileHeight
+      );
+    }
 
     pop();
   }
@@ -213,32 +161,16 @@ class Terrain extends Background {
 
 // Pasto: fila de inicio (y la base de la meta).
 class Grass extends Terrain {
-  paint(i, j) {
-    const t = this.theme;
-    const v = this.row % 4;
-
-    // Florecitas sueltas.
-    if (j >= 2 && j <= 7 && Background.hash(i, j, v + 7) < 0.012) {
-      const k = floor(Background.hash(i, j, v + 8) * t.flowers.length);
-      return t.flowers[k];
-    }
-
-    const n = Background.hash(i, j, v);
-    if (n < 0.18) return t.grass[0];
-    if (n > 0.9) return t.grass[2];
-    return t.grass[1];
+  static preload() {
+    Grass.sprites = Terrain.preloadSprites("grass");
   }
 }
 
 
-// Meta: franja a cuadros de llegada con pasto arriba y abajo.
+// Meta: franja de llegada con pasto arriba y abajo.
 class Goal extends Grass {
-  paint(i, j) {
-    if (j <= 1 || j >= 8) {
-      return super.paint(i, j);
-    }
-    const cell = (floor(i / 2) + floor((j - 2) / 2)) % 2;
-    return this.theme.goal[cell];
+  static preload() {
+    Goal.sprites = Terrain.preloadSprites("goal");
   }
 
   draw() {
@@ -262,40 +194,20 @@ class Goal extends Grass {
 
 // Río: agua con olas que se mueve sola.
 class Water extends Terrain {
+  static preload() {
+    Water.sprites = Terrain.preloadSprites("water");
+  }
+
   constructor(row, theme) {
     super(row, theme);
+
     // Cada fila de agua corre hacia un lado distinto.
     this.speed = (row % 2 === 0 ? 1 : -1) * this.p * 6;
   }
 
-  paint(i, j) {
-    const t = this.theme.water;
-    // El patrón se repite cada 16 columnas para poder desplazarlo.
-    const k = i % 16;
-
-    // Espuma en las orillas.
-    if ((j === 0 && this.neighbor(-1) !== "river") ||
-        (j === 9 && this.neighbor(1) !== "river")) {
-      return t[2];
-    }
-
-    // Olas.
-    if ((j === 3 && k >= 2 && k <= 5) ||
-        (j === 7 && k >= 10 && k <= 13)) {
-      return t[1];
-    }
-
-    // Brillos.
-    if (Background.hash(k, j, 5) > 0.95) {
-      return t[2];
-    }
-
-    return t[0];
-  }
-
   update() {
     const dt = min(deltaTime, 50) / 1000;
-    const period = 16 * this.p;
+    const period = Terrain.TILE_WIDTH * this.p;
     this.offset = ((this.offset + this.speed * dt) % period + period) % period;
   }
 }
@@ -303,27 +215,8 @@ class Water extends Terrain {
 
 // Carretera: asfalto con líneas de carril.
 class Road extends Terrain {
-  paint(i, j) {
-    const t = this.theme;
-
-    // Borde superior continuo si arriba no hay carretera.
-    if (j === 0 && this.neighbor(-1) !== "road") {
-      return t.edge;
-    }
-
-    if (j === 9) {
-      // Línea punteada entre dos carriles, continua al final.
-      if (this.neighbor(1) === "road") {
-        if (floor(i / 4) % 2 === 0) return t.line;
-      } else {
-        return t.edge;
-      }
-    }
-
-    const n = Background.hash(i, j, this.row % 4);
-    if (n < 0.08) return t.road[1];
-    if (n > 0.94) return t.road[2];
-    return t.road[0];
+  static preload() {
+    Road.sprites = Terrain.preloadSprites("road");
   }
 }
 
@@ -331,24 +224,8 @@ class Road extends Terrain {
 // Andén: baldosas grises con bordillo amarillo y negro
 // donde toca la carretera.
 class Sidewalk extends Terrain {
-  paint(i, j) {
-    const t = this.theme;
-
-    if ((j === 0 && this.neighbor(-1) === "road") ||
-        (j === 9 && this.neighbor(1) === "road")) {
-      return t.curb[floor(i / 3) % 2];
-    }
-
-    // Juntas de las baldosas (desfasadas como ladrillos).
-    if (j === 0 || j === 5 || j === 9 ||
-        i % 8 === (j < 5 ? 0 : 4)) {
-      return t.sidewalk[2];
-    }
-
-    if (Background.hash(i, j, this.row % 4) > 0.93) {
-      return t.sidewalk[0];
-    }
-    return t.sidewalk[1];
+  static preload() {
+    Sidewalk.sprites = Terrain.preloadSprites("sidewalk");
   }
 }
 
@@ -367,6 +244,9 @@ function createTerrain(row, theme) {
 
 // Landscape: el mapa completo, formado por una fila de terreno
 // por cada fila de la grilla.
+//
+// Las paletas se conservan para los elementos de interfaz que
+// todavía utilizan sus colores.
 class Landscape extends Background {
   // Paletas de colores (el nivel elige cuál usar).
   static themes = {
