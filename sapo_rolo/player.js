@@ -50,6 +50,7 @@ class Player {
 
   static preload() {
     Player.skullImg = loadImage("img/player/skull.png");
+    playerMoveSound = new Audio("aud/player/player_move.mp3");
   }
 
   static step() {
@@ -135,6 +136,10 @@ class Player {
       t: 0
     };
 
+    if (frameCount % 5 === 0) {
+      playGameSound(playerMoveSound);
+    }
+    
     this.row = toRow;
   }
 

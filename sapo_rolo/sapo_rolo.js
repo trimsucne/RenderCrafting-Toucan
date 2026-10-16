@@ -3,6 +3,34 @@
 // Márgenes generales del mapa.
 const MARGINX = 0, MARGINY = 0;
 
+// Localidades de Bogotá asignadas a los primeros 20 niveles.
+const BOGOTA_LOCALITIES = [
+  "Usaquén",
+  "Chapinero",
+  "Santa Fe",
+  "San Cristóbal",
+  "Usme",
+  "Tunjuelito",
+  "Bosa",
+  "Kennedy",
+  "Fontibón",
+  "Engativá",
+  "Suba",
+  "Barrios Unidos",
+  "Teusaquillo",
+  "Los Mártires",
+  "Antonio Nariño",
+  "Puente Aranda",
+  "La Candelaria",
+  "Rafael Uribe Uribe",
+  "Ciudad Bolívar",
+  "Sumapaz"
+];
+
+function getLocalityName(level) {
+  return BOGOTA_LOCALITIES[level] || "infinito";
+}
+
 // Cuadrícula del mapa (filas contadas de arriba hacia abajo)
 // Definición por defecto que es reemplazada procedimentalmente
 const GRID = {
@@ -69,8 +97,25 @@ let introStartTime;
 let showIntro = true;
 
 let menuGif;
-let selectedLevel = -1;
+// Dificultad seleccionada en el menú: 0 fácil, 1 normal, 2 difícil.
+let selectedDifficulty = 1;
+let playerMoveSound;
+let cityBackgroundSound;
+let citySoundStarted = false;
 
+function playGameSound(sound, loop = false) {
+  if (!sound || !sound.paused) {
+    return;
+  }
+
+  sound.loop = loop;
+  sound.volume = 0.5;
+
+  sound.play().catch(() => {
+    // El navegador puede bloquear la reproducción.
+    console.log("Reproducción de audio bloqueada");
+  });
+}
 
 function preload() {
   Car.preload();
@@ -118,6 +163,11 @@ function draw() {
 // Entrada principal.
 // Igual que draw(), la entrada se delega al estado actual.
 function keyPressed() {
+  if (!citySoundStarted) {
+    playGameSound(cityBackgroundSound, true);
+    citySoundStarted = true;
+  }
+  
   state.keyPressed(key);
 
   // Evita que las flechas y la barra espaciadora desplacen la página.
@@ -199,7 +249,9 @@ class StateManager {
   static states = {
     initial: {
       PLAY: (parent) => {
-        return new PlayState(parent, max(selectedLevel, 0));
+        parent.level = 0;
+        levelManager.setDifficulty(selectedDifficulty);
+        return new PlayState(parent, 0);
       }
     },
     playing: {
@@ -360,9 +412,9 @@ class InitState {
       return;
     }
 
-    selectedLevel = getSelectedLevel();
+    selectedDifficulty = getSelectedDifficulty();
 
-    if (selectedLevel > -1) {
+    if (selectedDifficulty > -1) {
       this.parent.change("PLAY");
     }
   }
@@ -529,6 +581,19 @@ class LevelManager {
   constructor() {
     this.current = 0;
     this.levels = LevelManager.levels;
+    this.difficulty = 1;
+  }
+
+  // Cambia la dificultad y descarta niveles generados con otra velocidad.
+  setDifficulty(difficulty) {
+    if (this.difficulty === difficulty) {
+      return;
+    }
+
+    this.difficulty = difficulty;
+    this.current = 0;
+    this.levels = [];
+    LevelManager.levels = this.levels;
   }
 
   // Obtiene la configuración de un nivel.
@@ -662,7 +727,8 @@ class LevelManager {
   
   // Generación procedimental de la configuración de obstáculos.
   generateObstacleConfig(level, grid) {
-    const speedFactor = min(1 + 0.1 * level, 2);
+    const difficultyFactor = [0.5, 0.75, 1][this.difficulty];
+    const speedFactor = min(difficultyFactor + 0.02 * level, 2);
     const extraCars = floor(level / 3);
     const logShrink = min(floor(level / 3), 2);
     const logOrder = [
@@ -686,9 +752,12 @@ class LevelManager {
       ];
       
       let curSpeed = random(0.06, 0.13) * speedFactor;
-      
-      while (result[result.length - 1] &&
-        abs(curSpeed - result[result.length - 1].speed) < 0.03) {
+
+      while (
+        result[result.length - 1] &&
+        abs(curSpeed - result[result.length - 1].speed) <
+          0.03 * speedFactor
+      ) {
         curSpeed = random(0.06, 0.13) * speedFactor;
       }
 

@@ -209,18 +209,18 @@ function drawInitialUI() {
   push();
   rectMode(CORNER);
   
-  // Botones para seleccionar el nivel.
+  // Botones para seleccionar la dificultad.
   let buttonW = 150;
   let buttonH = 48;
   let gap = 20;
   let totalW = buttonW * 3 + gap * 2;
   let startX = (width - totalW) / 2;
   let buttonY = height * 0.7;
-
+  
+  let difficulty = ["FÁCIL", "NORMAL", "DIFÍCIL"]
+  
   for (let i = 0; i < 3; i++) {
     let x = startX + i * (buttonW + gap);
-    let level = i + 1;
-
     let hover =
       mouseX >= x &&
       mouseX <= x + buttonW &&
@@ -233,12 +233,12 @@ function drawInitialUI() {
     strokeWeight(2);
     rect(x, buttonY, buttonW, buttonH, 10);
 
-    // Texto del nivel.
+    // Texto de la dificultad.
     noStroke();
     fill(hover ? "#fff176" : "#ffffff");
     textAlign(CENTER, CENTER);
     textSize(20);
-    text("NIVEL " + level, x + buttonW / 2, buttonY + buttonH / 2);
+    text(difficulty[i], x + buttonW / 2, buttonY + buttonH / 2);
   }
 
   // Instrucciones debajo de los niveles.
@@ -259,9 +259,9 @@ function drawInitialUI() {
   pop();
 }
 
-// Devuelve el nivel correspondiente a la posición del ratón.
-// Devuelve -1 si no se ha pulsado ningún botón.
-function getSelectedLevel() {
+// Devuelve la dificultad correspondiente a la posición del ratón.
+// Devuelve 0 si no se ha pulsado ningún botón.
+function getSelectedDifficulty() {
   const buttonW = 150;
   const buttonH = 48;
   const gap = 20;
@@ -287,16 +287,22 @@ function getSelectedLevel() {
 }
 
 function win(level) {
+  const currentLevel = level + 1;
+  const nextLevel = level + 2;
+
   new Screen({
     backdrop: "#1b3a24",
-    title: "¡Nivel " + (level + 1) + " completado!",
+    title: "¡Nivel " + currentLevel + " (" +
+      getLocalityName(level) + ") completado!",
+    titleSize: 30,
     titleColor: "#a5d6a7",
     frogs: true,
     lines: [
       "Puntos: " + nf(score, 5) + "    Récord: " + nf(highScore, 5),
       "Vidas: " + lifes,
       {
-        text: "Presiona ENTER para el nivel " + (level + 2),
+        text: "Presiona ENTER para el nivel " + nextLevel + " (" +
+          getLocalityName(level + 1) + ")",
         color: "#fff176",
         blink: true
       }
@@ -305,12 +311,17 @@ function win(level) {
 }
 
 function lose(level) {
+  const currentLevel = level + 1;
+
   new Screen({
     backdrop: "#3a1414",
     title: "¡Perdiste!",
     titleColor: "#ef9a9a",
     lines: [
-      "Llegaste hasta el nivel " + (level + 1),
+      {
+        text: "Llegaste hasta el nivel " + currentLevel + " (" +
+          getLocalityName(level) + ")",
+      },
       "Puntos: " + nf(score, 5) + "    Récord: " + nf(highScore, 5),
       {
         text: "Presiona ENTER para intentar de nuevo",
