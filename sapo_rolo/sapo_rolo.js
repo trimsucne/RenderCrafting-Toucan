@@ -727,8 +727,8 @@ class LevelManager {
   
   // Generación procedimental de la configuración de obstáculos.
   generateObstacleConfig(level, grid) {
-    const difficultyFactor = [0.5, 0.75, 1][this.difficulty];
-    const speedFactor = min(difficultyFactor + 0.02 * level, 2);
+    const difficultyFactor = [0.4, 0.6, 0.8][this.difficulty];
+    const speedFactor = min(difficultyFactor + 0.01 * level, 2);
     const extraCars = floor(level / 3);
     const logShrink = min(floor(level / 3), 2);
     const logOrder = [
@@ -761,16 +761,23 @@ class LevelManager {
         curSpeed = random(0.06, 0.13) * speedFactor;
       }
 
+      let dir = random() < 0.5 ? -1 : 1;
+
+      if (result.length >= 3) {
+        let last2 = result.slice(-2);
+
+        if (last2.every(item => item.dir === last2[0].dir)) {
+          dir = -last2[0].dir;
+        }
+      }
+
       result.push({
         row: row,
         type: "log",
         size: logOrder[
-          max(
-            0,
-            logOrder.indexOf(size) - logShrink
-          )
+          max(0, logOrder.indexOf(size) - logShrink)
         ],
-        dir: random() < 0.5 ? -1 : 1,
+        dir: dir,
         speed: curSpeed,
         count: floor(random(2, 5))
       });
@@ -794,10 +801,20 @@ class LevelManager {
         "blue"
       ];
 
+      let dir = random() < 0.5 ? -1 : 1;
+
+      if (result.length >= 3) {
+        let last2 = result.slice(-2);
+
+        if (last2.every(item => item.dir === last2[0].dir)) {
+          dir = -last2[0].dir;
+        }
+      }
+
       const cfg = {
         row: row,
         type: type,
-        dir: random() < 0.5 ? -1 : 1,
+        dir: dir,
         speed: 0,
         count: 0
       };

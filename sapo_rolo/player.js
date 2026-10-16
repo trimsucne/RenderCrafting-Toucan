@@ -14,9 +14,9 @@
 // Las colisiones las decide manager.js.
 
 class Player {
-  static COLUMNS = 17;
+  static COLUMNS;
 
-  static HOP_TIME = 0.12;
+  static HOP_TIME = 0.1;
   static DEATH_TIME = 0.9;
 
   static skullImg = undefined;
@@ -53,8 +53,13 @@ class Player {
     playerMoveSound = new Audio("aud/player/player_move.mp3");
   }
 
-  static step() {
+  static cellWidth() {
+    Player.COLUMNS = floor(mapY(1)/GRID.rowHeight()) + 10;
     return sizeX(1 / Player.COLUMNS);
+  }
+
+  static step() {
+    return Player.cellWidth();
   }
 
   constructor(x, y, width, height, lifes) {
@@ -374,15 +379,15 @@ class Frog extends Player {
   constructor(x, y, lifes, type = "green") {
     const img = Frog.sprite(type);
 
-    // Todas las variantes ocupan el 80 % de la altura
-    // de una fila. El ancho conserva la proporción del PNG.
-    const h = GRID.rowHeight() * 0.8;
-
     const aspectRatio =
       img && img.width > 0 && img.height > 0
         ? img.width / img.height
         : 1;
 
+    // Frog fits row and grid cell, like obstacles.
+    const maxHeight = GRID.rowHeight() * 0.8;
+    const maxWidth = Player.cellWidth() * 0.8;
+    const h = min(maxHeight, maxWidth / aspectRatio);
     const w = h * aspectRatio;
 
     super(x, y, w, h, lifes);
