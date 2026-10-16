@@ -14,6 +14,7 @@
 // en las clases hijas).
 class Background {
   static preload() {
+    cityBackgroundSound = new Audio("aud/background/city_background.mp3");
   }
   
   // Cada fila del mapa mide 10 pixeles de arte de alto.
@@ -467,7 +468,7 @@ class Screen extends Background {
 
     this.items = [
       new UIText(width / 2, height * 0.3, config.title, {
-        size: min(56, width / 12),
+        size: config.titleSize || min(56, width / 12),
         color: config.titleColor || "#fff176"
       })
     ];
@@ -532,12 +533,13 @@ function createUI(uiConfig = {}) {
   const y = GRID.rowY(GRID.GOAL[0]);
   const size = constrain(rowH * 0.34, 11, 18);
   const levelNumber = (uiConfig.level || 0) + 1;
+  const locality = getLocalityName(uiConfig.level || 0);
 
   const elements = [
     new UIText(
       12,
       y,
-      () => "NIVEL " + levelNumber +
+      () => "NIVEL " + levelNumber + " (" + locality + ")" +
         "  PTS " + nf(get_score(), 5) +
         "  MAX " + nf(get_high_score(), 5),
       { size: size, align: LEFT, pill: true }
