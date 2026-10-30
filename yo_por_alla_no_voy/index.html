@@ -4,15 +4,42 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+  <!-- Activar willReadFrequently en p5.js -->
+  <script>
+    (function() {
+      const originalGetContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, attributes) {
+        if (type === '2d') {
+          attributes = attributes || {};
+          attributes.willReadFrequently = true;
+        }
+        return originalGetContext.call(this, type, attributes);
+      };
+    })();
+  </script>
+
   <!-- PLEASE NO CHANGES BELOW THIS LINE (UNTIL I SAY SO) -->
   <script language="javascript" type="text/javascript" src="libraries/p5.min.js"></script>
+  <script language="javascript" type="text/javascript" src="libraries/matter.js"></script>
+  <script language="javascript" type="text/javascript" src="background.js"></script>
+  <script language="javascript" type="text/javascript" src="crowd.js"></script>
+  <script language="javascript" type="text/javascript" src="manager.js"></script>
+  <script language="javascript" type="text/javascript" src="obstacles.js"></script>
+  <script language="javascript" type="text/javascript" src="physics.js"></script>
+  <script language="javascript" type="text/javascript" src="player.js"></script>
   <script language="javascript" type="text/javascript" src="yo_por_alla_no_voy.js"></script>
   <!-- OK, YOU CAN MAKE CHANGES BELOW THIS LINE AGAIN -->
-
+  
   <style>
     body {
       padding: 0;
       margin: 0;
+      background-color: #222;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh; 
     }
   </style>
 </head>

@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'sapo_rolo/**'
+      - 'yo_por_alla_no_voy/**'
       - '.github/workflows/deploy-game.yml'
   workflow_dispatch:
 
@@ -35,7 +35,7 @@ jobs:
       - name: Upload game folder
         uses: actions/upload-pages-artifact@v4
         with:
-          path: './sapo_rolo'
+          path: './yo_por_alla_no_voy'
 
       - name: Deploy to GitHub Pages
         id: deployment
