@@ -110,7 +110,7 @@ class Game {
   static menuImg = undefined;
 
   static preload() {
-    Game.menuImg = loadSprite("img/menu.gif");
+    Game.menuImg = loadSprite("img/menu.png");
 
     Game.sounds = {
       horn: new Audio("aud/player/horn.mp3"),
