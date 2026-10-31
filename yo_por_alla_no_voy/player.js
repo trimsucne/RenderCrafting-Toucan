@@ -293,7 +293,7 @@ class Player {
     this.deathTimer = 0;
     this.deathCause = undefined;
 
-    // Unos segundos de respiro para que no lo abordan de inmediato.
+    // Unos segundos de respiro para que no lo aborden de inmediato.
     this.invulnerable = Player.INVULNERABLE_TIME;
   }
 
