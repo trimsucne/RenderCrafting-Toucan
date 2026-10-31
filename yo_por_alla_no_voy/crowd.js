@@ -97,15 +97,32 @@ class Person {
     return { x: taxi.x, y: taxi.y };
   }
 
+  // Gravedad: aceleración (píxeles por paso) con la que el taxi atrae
+  // a esta persona. Es igual para livianos y pesados (como la gravedad
+  // real): lo que cambia es cuánto cuesta moverlos al chocar.
+  pull(taxi) {
+    if (taxi.isDying()) {
+      return { x: 0, y: 0 };
+    }
+  
+    return PhysicsWorld.pull(
+      taxi.x - this.x,
+      taxi.y - this.y,
+      taxi.body.mass
+    );
+  }
+  
   // Se llama antes de cada paso físico: decide la velocidad.
   steer(taxi) {
     const v = this.body.velocity;
-
-    // Aturdido: no se dirige, solo se va frenando.
+    const pull = this.pull(taxi);
+  
+    // Aturdido: no se dirige, solo se va frenando. La gravedad lo
+    // sigue jalando, así que quien sale despedido vuelve curvando.
     if (this.state === "dazed") {
       Body.setVelocity(this.body, {
-        x: v.x * Person.DRAG,
-        y: v.y * Person.DRAG
+        x: v.x * Person.DRAG + pull.x,
+        y: v.y * Person.DRAG + pull.y
       });
       return;
     }
@@ -126,9 +143,11 @@ class Person {
     const wantedX = cos(angle) * this.maxSpeed;
     const wantedY = sin(angle) * this.maxSpeed;
 
+    // Persiguiendo, la gravedad se suma: cerca del taxi corren un
+    // poco más rápido.
     Body.setVelocity(this.body, {
-      x: v.x + (wantedX - v.x) * this.gain,
-      y: v.y + (wantedY - v.y) * this.gain
+      x: v.x + (wantedX - v.x) * this.gain + pull.x,
+      y: v.y + (wantedY - v.y) * this.gain + pull.y
     });
   }
 
@@ -581,7 +600,37 @@ class Crowd {
       person.steer(taxi);
     }
   }
-
+  
+  // Gravedad: aceleración (píxeles por paso) con la que toda la gente
+  // jala al taxi. Cada persona atrae según su masa, por eso un grupo
+  // grande o un metalero pesan más. Se limita para que el jalón total
+  // no gane al control del taxi.
+  pullOn(taxi) {
+    let x = 0;
+    let y = 0;
+  
+    for (const person of this.people) {
+      const f = PhysicsWorld.pull(
+        person.x - taxi.x,
+        person.y - taxi.y,
+        person.body.mass
+      );
+  
+      x += f.x;
+      y += f.y;
+    }
+  
+    const max = PhysicsWorld.GRAVITY_MAX * 0.7 / 3600;
+    const length = Math.hypot(x, y);
+  
+    if (length > max) {
+      x = x / length * max;
+      y = y / length * max;
+    }
+  
+    return { x: x, y: y };
+  }
+  
   // Gente en fila a lo largo del borde avisado, entrando con impulso.
   launchWave() {
     const { side, t } = this.warning;

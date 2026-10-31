@@ -23,7 +23,7 @@ class Player {
   // El pito empuja a la gente que esté cerca (ver Crowd.blast()).
   static HORN_COOLDOWN = 3.5;
   static HORN_RADIUS = 190;
-  static HORN_IMPULSE = 2.4;
+  static HORN_IMPULSE = 3;
 
   static DEATH_TIME = 1.2;
   static INVULNERABLE_TIME = 2.2;
@@ -161,10 +161,13 @@ class Player {
     }
 
     const gain = moving ? Player.ACCEL : Player.BRAKE;
-
+    
+    // Gravedad: la gente jala al taxi hacia ella (crowd.js).
+    const pull = game.crowd.pullOn(this);
+    
     Body.setVelocity(this.body, {
-      x: v.x + (dx - v.x) * gain,
-      y: v.y + (dy - v.y) * gain
+      x: v.x + (dx - v.x) * gain + pull.x,
+      y: v.y + (dy - v.y) * gain + pull.y
     });
   }
 

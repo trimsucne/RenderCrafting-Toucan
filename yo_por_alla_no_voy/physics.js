@@ -9,6 +9,11 @@
 // al que pertenece (taxi, persona, bus...). Así las colisiones se
 // interpretan en manager.js sin tener que buscar nada.
 //
+// Gravedad: matter.js solo sabe de una gravedad con dirección fija
+// (hacia abajo). En su lugar hay una gravedad de atracción entre
+// cuerpos (PhysicsWorld.pull()): el taxi atrae a la gente y la gente,
+// con su masa, atrae al taxi. Mientras más cerca y más pesado, más jala.
+//
 // Unidades: matter.js trabaja en píxeles por paso (1 paso = 1/60 s),
 // así que una velocidad de 3 equivale a 180 píxeles por segundo.
 // Las clases del juego dan sus velocidades en píxeles por segundo y
@@ -31,6 +36,34 @@ class PhysicsWorld {
 
   // Grosor de las paredes, grande a propósito para que nada las cruce.
   static WALL = 200;
+  
+  // Gravedad de atracción: la aceleración (píxeles por segundo al
+  // cuadrado) que produce un cuerpo de masa m a distancia d es
+  // GRAVITY * m / (d² + SOFT²). SOFT suaviza el cálculo para que no se
+  // dispare al estar encima y MAX limita la aceleración de cada atracción.
+  static GRAVITY = 900000;
+  static GRAVITY_SOFT = 40;
+  static GRAVITY_MAX = 500;
+  
+  // Aceleración (en píxeles por paso, lista para sumarla a la
+  // velocidad) que produce, sobre un cuerpo, otro cuerpo de masa 'mass'
+  // que está a (dx, dy) de distancia. Apunta hacia el otro cuerpo.
+  static pull(dx, dy, mass) {
+    const soft = PhysicsWorld.GRAVITY_SOFT;
+    const d = Math.sqrt(dx * dx + dy * dy + soft * soft);
+  
+    const a = min(
+      PhysicsWorld.GRAVITY * mass / (d * d),
+      PhysicsWorld.GRAVITY_MAX
+    );
+  
+    // De píxeles por segundo² a píxeles por paso (dividir dos veces
+    // entre 60) y repartida según la dirección.
+    return {
+      x: dx / d * a / 3600,
+      y: dy / d * a / 3600
+    };
+  }
 
   constructor(arena) {
     this.engine = Engine.create();
