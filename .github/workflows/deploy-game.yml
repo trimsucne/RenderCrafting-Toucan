@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'yo_por_alla_no_voy/**'
+      - 'fog_shader/**'
       - '.github/workflows/deploy-game.yml'
   workflow_dispatch:
 
@@ -35,7 +35,7 @@ jobs:
       - name: Upload game folder
         uses: actions/upload-pages-artifact@v4
         with:
-          path: './yo_por_alla_no_voy'
+          path: './fog_shader'
 
       - name: Deploy to GitHub Pages
         id: deployment
